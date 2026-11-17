@@ -1,0 +1,35 @@
+{
+    // Debug configurations for the API (C# extension / C# Dev Kit, debugger "coreclr").
+    // "API" starts the compose `db` service (SQL Server on 127.0.0.1:14330) and waits for its
+    // healthcheck before building; if the container is already running this takes a second.
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "API",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "db: up + build",
+            "program": "${workspaceFolder}/src/Api/bin/Debug/net10.0/CqrsApiExample.Api.dll",
+            "args": [],
+            "cwd": "${workspaceFolder}/src/Api",
+            "stopAtEntry": false,
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "ASPNETCORE_URLS": "http://localhost:5235"
+            },
+            "serverReadyAction": {
+                "action": "openExternally",
+                "pattern": "\\bNow listening on:\\s+(https?://\\S+)",
+                "uriFormat": "%s/swagger"
+            },
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
+            "name": "Attach to process",
+            "type": "coreclr",
+            "request": "attach",
+            "processId": "${command:pickProcess}"
+        }
+    ]
+}

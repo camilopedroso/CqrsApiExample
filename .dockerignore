@@ -1,0 +1,14 @@
+**/bin/
+**/obj/
+**/*.db
+.git/
+.vs/
+.vscode/
+.idea/
+tests/
+benchmarks/
+_requests/
+*.md
+compose.yaml
+Dockerfile
+.dockerignore

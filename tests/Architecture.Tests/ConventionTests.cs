@@ -1,0 +1,70 @@
+using CqrsApiExample.Application.Common.Interfaces.Notifications;
+using CqrsApiExample.Application.Common.Interfaces.Persistence;
+using CqrsApiExample.Application.Common.Messaging;
+using FluentAssertions;
+using NetArchTest.Rules;
+
+namespace CqrsApiExample.Architecture.Tests;
+
+public class ConventionTests
+{
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void Queries_Should_Not_Use_The_Write_Side_Repository()
+    {
+        Types.InAssembly(Layers.Application)
+             .That().ResideInNamespaceContaining(".Queries")
+             .ShouldNot().HaveDependencyOnAny(typeof(IUserRepository).FullName!)
+             .GetResult()
+             .ShouldPass("queries read through I*Queries projections, not through aggregates (CQRS)");
+    }
+
+    [Fact]
+    [Trait("Category", "Architecture")]
+    public void Handlers_And_Validators_Should_Be_Sealed()
+    {
+        Types.InAssembly(Layers.Application)
+             .That().AreClasses().And().HaveNameEndingWith("Handler")
+             .Should().BeSealed()
+             .GetResult()
+             .ShouldPass("handlers are leaves, not extension points");
+
+        Types.InAssembly(Layers.Application)
+             .That().AreClasses().And().HaveNameEndingWith("Validator")
+             .Should().BeSealed()
+             .GetResult()
+             .ShouldPass("validators are leaves, not extension points");
+    }
+
+    [Theory]
+    [Trait("Category", "Architecture")]
+    [InlineData(typeof(IUserRepository))]
+    [InlineData(typeof(IUserQueries))]
+    [InlineData(typeof(IUnitOfWork))]
+    [InlineData(typeof(IEmailSender))]
+    public void Infrastructure_Implementations_Should_Be_Internal(Type abstraction)
+    {
+        var implementations = Types.InAssembly(Layers.Infrastructure).That().ImplementInterface(abstraction);
+
+        implementations.GetTypes().Should().NotBeEmpty($"{abstraction.Name} must be implemented by the infrastructure");
+        implementations.Should().NotBePublic()
+                       .GetResult()
+                       .ShouldPass("consumers depend on the application abstraction, never on the implementation");
+    }
+    [Theory]
+    [Trait("Category", "Architecture")]
+    [InlineData(typeof(ICommand<>), ".Commands.", "Command")]
+    [InlineData(typeof(IQuery<>), ".Queries.", "Query")]
+    public void Requests_Should_Live_On_Their_Side_Of_CQRS(Type requestInterface, string expectedNamespacePart, string expectedSuffix)
+    {
+        var requests = Layers.Application.GetTypes()
+                             .Where(type => !type.IsInterface
+                                            && type.GetInterfaces().Any(@interface => @interface.IsGenericType
+                                                && @interface.GetGenericTypeDefinition() == requestInterface))
+                             .ToList();
+
+        requests.Should().NotBeEmpty();
+        requests.Should().OnlyContain(type => type.Namespace!.Contains(expectedNamespacePart) && type.Name.EndsWith(expectedSuffix),
+                                      $"every {requestInterface.Name} belongs in a {expectedNamespacePart} namespace and is named *{expectedSuffix}");
+    }
+}

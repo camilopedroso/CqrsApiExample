@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    EF Core vs ADO.NET, calling the persistence implementations directly (no HTTP).
+    Run in Release (see Program.cs): dotnet run -c Release with this project.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Testcontainers.MsSql" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Infrastructure\CqrsApiExample.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

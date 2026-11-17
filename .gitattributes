@@ -1,0 +1,6 @@
+# LF everywhere, in the repository and in every working copy, whatever core.autocrlf says.
+# Matches end_of_line = lf in .editorconfig, so `dotnet format --verify-no-changes` passes on Windows too.
+* text=auto eol=lf
+
+# Binary: never touch line endings.
+*.png binary

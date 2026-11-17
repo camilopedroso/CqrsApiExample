@@ -1,0 +1,31 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".dockerignore" />
+    <File Path=".editorconfig" />
+    <File Path="compose.yaml" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="Dockerfile" />
+    <File Path="dotnet-tools.json" />
+  </Folder>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/Persistence.Benchmarks/CqrsApiExample.Persistence.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Application/CqrsApiExample.Application.csproj" />
+    <Project Path="src/Contracts/CqrsApiExample.Contracts.csproj" />
+    <Project Path="src/Api/CqrsApiExample.Api.csproj" />
+    <Project Path="src/Domain/CqrsApiExample.Domain.csproj" />
+    <Project Path="src/Infrastructure/CqrsApiExample.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <File Path="tests/Directory.Build.props" />
+    <Project Path="tests/Application.UnitTests/CqrsApiExample.Application.UnitTests.csproj" />
+    <Project Path="tests/Architecture.Tests/CqrsApiExample.Architecture.Tests.csproj" />
+    <Project Path="tests/Api.IntegrationTests/CqrsApiExample.Api.IntegrationTests.csproj" />
+    <Project Path="tests/Api.UnitTests/CqrsApiExample.Api.UnitTests.csproj" />
+    <Project Path="tests/Domain.UnitTests/CqrsApiExample.Domain.UnitTests.csproj" />
+    <Project Path="tests/Infrastructure.IntegrationTests/CqrsApiExample.Infrastructure.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="NetArchTest.eNhancedEdition" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Application\CqrsApiExample.Application.csproj" />
+    <ProjectReference Include="..\..\src\Contracts\CqrsApiExample.Contracts.csproj" />
+    <ProjectReference Include="..\..\src\Api\CqrsApiExample.Api.csproj" />
+    <ProjectReference Include="..\..\src\Domain\CqrsApiExample.Domain.csproj" />
+    <ProjectReference Include="..\..\src\Infrastructure\CqrsApiExample.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

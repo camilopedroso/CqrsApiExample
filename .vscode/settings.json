@@ -1,0 +1,20 @@
+{
+  "sqltools.connections": [
+    {
+      "group": "CqrsApiExample",
+      "name": "CqrsApiExample · SQL Server (127.0.0.1:14330 / CqrsApi)",
+      "driver": "MSSQL",
+      "server": "127.0.0.1",
+      "port": 14330,
+      "database": "CqrsApi",
+      "username": "sa",
+      "password": "CqrsApi_Dev_2026!",
+      "previewLimit": 50,
+      "mssqlOptions": {
+        "appName": "CqrsApiExample (VS Code)",
+        "encrypt": true,
+        "trustServerCertificate": true
+      }
+    }
+  ]
+}

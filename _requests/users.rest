@@ -1,0 +1,288 @@
+# =============================================================================
+#  CqrsApiExample: a guided tour of the API
+# =============================================================================
+#  Requires the VS Code "REST Client" extension (humao.rest-client).
+#  Click "Send Request" above each request, top to bottom: some requests reuse
+#  values from earlier ones (marked "needs: <name>").
+#
+#  Start the API first, either way works on the same URL:
+#    docker compose up --build                    (SQL Server + API in Docker)
+#    docker compose up db  +  dotnet run --project src/Api
+#
+#  Every error is a ProblemDetails (RFC 9457) body with
+#  Content-Type: application/problem+json, a "traceId" to find it in the logs,
+#  and "errorCodes" with stable codes in the Area.Name form (e.g. User.NotFound).
+#  Clients should branch on errorCodes, not on the human-readable messages.
+#
+#  Emails are generated with {{$guid}}, so the file can be run any number of
+#  times without clashing with data from earlier runs.
+# =============================================================================
+
+@baseUrl = http://localhost:5235
+@api = {{baseUrl}}/api
+
+
+###
+# =============================================================================
+#  1. Discovery
+# =============================================================================
+
+### 1.1 OpenAPI document: every endpoint with its possible responses
+#   200, describes GET/POST /api/Users and GET /api/Users/{id}, including the
+#   error statuses each one can return (400, 404, 409, 500).
+#   Swagger UI (open in a browser): http://localhost:5235/swagger
+#   Both exist only in the Development environment.
+GET {{baseUrl}}/openapi/v1.json
+
+
+###
+# =============================================================================
+#  2. Reading users (CQRS read side: projections straight to a read model)
+# =============================================================================
+
+### 2.1 List users
+#   200, ordered by creation date. The seed user (Jane Doe) is created at
+#   startup in Development.
+# @name listUsers
+GET {{api}}/users
+
+### 2.2 Get one user by id (needs: listUsers)
+#   200 with the same fields as in the list.
+GET {{api}}/users/{{listUsers.response.body.$[0].id}}
+
+
+###
+# =============================================================================
+#  3. Creating a user (CQRS write side: domain rules, unit of work, events)
+# =============================================================================
+
+### 3.1 Create a user
+#   201 Created, with:
+#   - a Location header pointing to the new user (used in 3.2);
+#   - normalized data: name/surname trimmed, email trimmed and lower-cased
+#     (see "name" and "email" in the response);
+#   - a welcome email, sent through the transactional outbox: the event is
+#     saved with the user in one transaction and a background worker sends it
+#     about 2 s later (retried if the email service fails; see 8.4).
+#     The email sender is a stand-in that only logs it, so look for
+#     `Email "Welcome!" sent` in the API output (docker compose logs api).
+# @name createUser
+POST {{api}}/users
+Content-Type: application/json
+
+{
+    "name": "  Ada  ",
+    "surname": "Lovelace",
+    "email": "  Ada.{{$guid}}@Example.COM  "
+}
+
+### 3.2 Follow the Location header of the new user (needs: createUser)
+#   200, the user as stored.
+GET {{createUser.response.headers.Location}}
+
+
+###
+# =============================================================================
+#  4. Business errors
+# =============================================================================
+
+### 4.1 Duplicate email: 409 User.DuplicateEmail (needs: createUser)
+#   Sends exactly the email typed in 3.1 (mixed case, with spaces). Emails are
+#   compared after normalization, so it is still a duplicate.
+#   A unique index in the database also covers concurrent requests (see 6.2).
+#   No welcome email is sent for a rejected user: its event was never stored.
+POST {{api}}/users
+Content-Type: application/json
+
+{
+    "name": "Ada",
+    "surname": "Again",
+    "email": "{{createUser.request.body.$.email}}"
+}
+
+### 4.2 User not found: 404 User.NotFound
+GET {{api}}/users/bc0b9fa8-cfd3-430e-adf8-7afbed42a5a1
+
+
+###
+# =============================================================================
+#  5. Input errors (400)
+# =============================================================================
+#  Validation errors come as "errors" grouped by FIELD (for forms) plus
+#  "errorCodes" (for code). Each field reports only its first failing rule.
+#  The codes are the same whether the request validator or the domain entity
+#  rejects the value.
+
+### 5.1 Several invalid fields at once
+#   400 errorCodes ["User.InvalidName", "User.InvalidEmail"]
+#   errors: Name -> "'Name' must not be empty."
+#           Email -> "'Email' is not a valid email address."
+POST {{api}}/users
+Content-Type: application/json
+
+{
+    "name": "",
+    "surname": "Lovelace",
+    "email": "not-an-email"
+}
+
+### 5.2 Every field invalid
+#   400 errorCodes ["User.InvalidName", "User.InvalidSurname", "User.InvalidEmail"]
+POST {{api}}/users
+Content-Type: application/json
+
+{
+    "name": "",
+    "surname": "",
+    "email": ""
+}
+
+### 5.3 Whitespace only counts as empty
+#   400 errorCodes ["User.InvalidName"]
+POST {{api}}/users
+Content-Type: application/json
+
+{
+    "name": "   ",
+    "surname": "Lovelace",
+    "email": "ada.{{$guid}}@example.com"
+}
+
+### 5.4 Too long: the limits come from the domain (User.NameMaxLength = 100)
+#   400 errorCodes ["User.InvalidName"]
+#   "The length of 'Name' must be 100 characters or fewer. You entered 101 characters."
+POST {{api}}/users
+Content-Type: application/json
+
+{
+    "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "surname": "Lovelace",
+    "email": "ada.{{$guid}}@example.com"
+}
+
+### 5.5 Missing field: same error as an empty one
+#   400 errorCodes ["User.InvalidSurname"]
+POST {{api}}/users
+Content-Type: application/json
+
+{
+    "name": "Ada",
+    "email": "ada.{{$guid}}@example.com"
+}
+
+### 5.6 Explicit null: same error as an empty one
+#   400 errorCodes ["User.InvalidSurname"]
+POST {{api}}/users
+Content-Type: application/json
+
+{
+    "name": "Ada",
+    "surname": null,
+    "email": "ada.{{$guid}}@example.com"
+}
+
+### 5.7 Empty id: 400 User.InvalidId (a GUID, but not a valid user id)
+GET {{api}}/users/00000000-0000-0000-0000-000000000000
+
+
+###
+# =============================================================================
+#  6. Unreadable requests
+# =============================================================================
+#  Requests MVC cannot even bind never reach validation. They get the same
+#  shape with errorCodes ["Request.Invalid"]; "errors" holds the JSON path of
+#  the problem with a generic message. The parser's own message is not passed
+#  on, because it can name internal types.
+
+### 6.1 Malformed JSON: 400 Request.Invalid
+#   errors: "$.name" -> "The input was not valid."
+POST {{api}}/users
+Content-Type: application/json
+
+{ "name": "Ada",
+
+### 6.2 Wrong JSON type (number instead of text): 400 Request.Invalid
+#   errors: "$.name" -> "The input was not valid." (no internal type names)
+POST {{api}}/users
+Content-Type: application/json
+
+{
+    "name": 123,
+    "surname": "Lovelace",
+    "email": "ada.{{$guid}}@example.com"
+}
+
+### 6.3 Empty body: 400 Request.Invalid ("A non-empty request body is required.")
+POST {{api}}/users
+Content-Type: application/json
+
+
+###
+# =============================================================================
+#  7. HTTP-level errors (raised by ASP.NET Core before the API code runs)
+# =============================================================================
+#  They still come as ProblemDetails with a "Request.*" error code, so a client
+#  can handle every error the same way.
+
+### 7.1 Id that is not a GUID: 404 Request.NotFound
+#   The route only matches GUIDs ({id:guid}), so no endpoint is found.
+#   Compare with 4.2: Request.NotFound = no such route,
+#                     User.NotFound    = the route exists, the user doesn't.
+GET {{api}}/users/not-a-guid
+
+### 7.2 Wrong Content-Type: 415 Request.UnsupportedMediaType
+POST {{api}}/users
+Content-Type: text/plain
+
+Ada Lovelace
+
+### 7.3 Method not supported: 405 Request.MethodNotAllowed
+#   The "Allow" response header lists what is supported (GET).
+DELETE {{api}}/users/{{listUsers.response.body.$[0].id}}
+
+
+###
+# =============================================================================
+#  8. Behaviours that need more than one request
+# =============================================================================
+#
+#  8.1 Unexpected error: 500 General.Unexpected
+#      Stop the database and list the users again (request 2.1):
+#        docker compose stop db
+#      Database calls are retried on transient failures (3 retries, short
+#      delays), so after about 20 s the API gives up and answers:
+#        500, errorCodes ["General.Unexpected"], "detail" with the exception
+#        message ("The maximum number of retries (3) was exceeded...";
+#        Development only, hidden in other environments).
+#      The full exception is logged once, with its traceId. Bring the db back:
+#        docker compose start db
+#
+#  8.2 Concurrent duplicates: exactly one 201, the rest 409 (never 500)
+#      Ten simultaneous requests with the same email, from a terminal:
+#        email="race-$RANDOM$RANDOM@example.com"; for i in $(seq 10); do \
+#          curl -s -o /dev/null -w '%{http_code} ' -X POST http://localhost:5235/api/users \
+#          -H 'Content-Type: application/json' \
+#          -d "{\"name\":\"Race\",\"surname\":\"Test\",\"email\":\"$email\"}" & done; wait; echo
+#      The check in code can't stop two requests that arrive together; the
+#      unique index in the database does, and the API turns that into a 409.
+#      Only one user is stored and only one welcome email is sent.
+#
+#  8.3 Logs (docker compose logs api, or the dotnet run output)
+#      Each request is logged with its elapsed time, and failures with their
+#      error codes, for example:
+#        CreateUserCommand handled in 42.9 ms
+#        CreateUserCommand failed in 2.5 ms with User.DuplicateEmail
+#      Request bodies are never logged (they carry personal data).
+#
+#  8.4 Outbox (how the welcome email of 3.1 is delivered)
+#      Every domain event is stored in OutboxMessages in the same transaction
+#      as the change, then handled in the background. Watch it in VS Code
+#      (SQLTools connection "CqrsApiExample") after running 3.1:
+#        SELECT Type, Attempts, OccurredAt, ProcessedAt, Error
+#        FROM OutboxMessages ORDER BY OccurredAt DESC;
+#        SELECT * FROM OutboxMessageConsumers;   -- which handler finished which message
+#      A failing handler is retried with backoff (5 s, 10 s, ... up to 10 min,
+#      10 attempts); after that the row keeps its Error for diagnosis. Handlers
+#      that already succeeded are never run again for the same message.
+#      If the API stops before sending, the message is still there and is sent
+#      when the API starts again.

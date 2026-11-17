@@ -1,0 +1,41 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "type": "process",
+            "command": "dotnet",
+            "args": [
+                "build",
+                "${workspaceFolder}/src/Api/CqrsApiExample.Api.csproj",
+                "/property:GenerateFullPaths=true",
+                "/consoleloggerparameters:NoSummary"
+            ],
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": "$msCompile"
+        },
+        {
+            // Starts only SQL Server and waits for its healthcheck (it is slow on Apple Silicon, emulated amd64).
+            "label": "db: up",
+            "type": "process",
+            "command": "docker",
+            "args": ["compose", "up", "-d", "--wait", "db"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        },
+        {
+            "label": "db: up + build",
+            "dependsOrder": "sequence",
+            "dependsOn": ["db: up", "build"],
+            "problemMatcher": []
+        },
+        {
+            "label": "db: down",
+            "type": "process",
+            "command": "docker",
+            "args": ["compose", "stop", "db"],
+            "options": { "cwd": "${workspaceFolder}" },
+            "problemMatcher": []
+        }
+    ]
+}

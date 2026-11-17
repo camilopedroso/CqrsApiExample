@@ -1,0 +1,53 @@
+# Local development stack: SQL Server + the API (Development environment, so the API applies
+# migrations, seeds the database and serves Swagger at http://localhost:5235/swagger).
+#
+#   docker compose up --build        # whole stack
+#   docker compose up db             # only SQL Server, then `dotnet run` the API locally
+#
+# Several projects can each run their own SQL Server, so this one is easy to tell apart:
+#   - host port 14330 (not 1433), overridable with MSSQL_HOST_PORT;
+#   - container and server name "cqrs-api-example-sql" (SELECT SERVERPROPERTY('MachineName'));
+#   - database "CqrsApi".
+# The SA password defaults to the local-only value also used in appsettings.Development.json and
+# .vscode/settings.json. Override it with MSSQL_SA_PASSWORD (environment or a .env file).
+# Ports are bound to 127.0.0.1.
+name: cqrs-api-example
+
+services:
+  db:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: cqrs-api-example-sql
+    hostname: cqrs-api-example-sql
+    # SQL Server has no ARM image; on Apple Silicon it runs emulated.
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-CqrsApi_Dev_2026!}
+    ports:
+      - "127.0.0.1:${MSSQL_HOST_PORT:-14330}:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q 'SELECT 1' -b -o /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  api:
+    build: .
+    container_name: cqrs-api-example-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      # Ado (default, as in appsettings.json) or EfCore: PERSISTENCE_PROVIDER=EfCore docker compose up
+      Persistence__Provider: ${PERSISTENCE_PROVIDER:-Ado}
+      ConnectionStrings__Database: "Server=db,1433;Database=CqrsApi;User Id=sa;Password=${MSSQL_SA_PASSWORD:-CqrsApi_Dev_2026!};Encrypt=True;TrustServerCertificate=True"
+    ports:
+      - "127.0.0.1:5235:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  mssql-data:
