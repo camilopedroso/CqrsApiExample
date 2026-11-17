@@ -1,11 +1,11 @@
 using System.Collections.Concurrent;
 using CqrsApiExample.Application.Common.Interfaces.Notifications;
 using CqrsApiExample.Infrastructure.Outbox;
+using CqrsApiExample.Tests.Shared;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
-using TheTesting.Shared;
 
 namespace CqrsApiExample.Api.IntegrationTests;
 

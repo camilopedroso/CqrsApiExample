@@ -1,7 +1,7 @@
 using Microsoft.Data.SqlClient;
 using Testcontainers.MsSql;
 
-namespace TheTesting.Shared;
+namespace CqrsApiExample.Tests.Shared;
 
 /// <summary>
 ///     One SQL Server container per test assembly (shared through an xUnit

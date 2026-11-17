@@ -4,13 +4,13 @@ using CqrsApiExample.Domain.UserAggregate;
 using CqrsApiExample.Domain.UserAggregate.Events;
 using CqrsApiExample.Infrastructure.Outbox;
 using CqrsApiExample.Infrastructure.Persistence.Repositories;
+using CqrsApiExample.Tests.Shared;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
-using TheTesting.Shared;
 
 namespace CqrsApiExample.Infrastructure.IntegrationTests.Outbox;
 

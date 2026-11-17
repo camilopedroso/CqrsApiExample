@@ -1,4 +1,4 @@
-using TheTesting.Shared;
+using CqrsApiExample.Tests.Shared;
 
 namespace CqrsApiExample.Infrastructure.IntegrationTests;
 

@@ -1,8 +1,8 @@
 using CqrsApiExample.Infrastructure.Persistence;
 using CqrsApiExample.Infrastructure.Persistence.Ado;
 using CqrsApiExample.Infrastructure.Persistence.Interceptors;
+using CqrsApiExample.Tests.Shared;
 using Microsoft.EntityFrameworkCore;
-using TheTesting.Shared;
 
 namespace CqrsApiExample.Infrastructure.IntegrationTests;
 

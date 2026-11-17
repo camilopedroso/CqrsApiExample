@@ -5,9 +5,9 @@ using CqrsApiExample.Domain.UserAggregate.Events;
 using CqrsApiExample.Infrastructure.Outbox;
 using CqrsApiExample.Infrastructure.Persistence.Queries;
 using CqrsApiExample.Infrastructure.Persistence.Repositories;
+using CqrsApiExample.Tests.Shared;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using TheTesting.Shared;
 
 namespace CqrsApiExample.Infrastructure.IntegrationTests.Persistence;
 

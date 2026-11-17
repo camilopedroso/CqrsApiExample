@@ -1,7 +1,7 @@
 using CqrsApiExample.Infrastructure.Persistence;
+using CqrsApiExample.Tests.Shared;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using TheTesting.Shared;
 
 namespace CqrsApiExample.Infrastructure.IntegrationTests.Persistence;
 
