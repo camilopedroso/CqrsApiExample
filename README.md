@@ -32,6 +32,10 @@ consistent error responses, and tests at every layer.
   themselves, administrators read anyone. A member gets `403` for someone else's id whether it
   exists or not, so the answer never confirms an id.
   Every row records who created and last changed it (`CreatedBy`/`ModifiedBy`), from the same token.
+- **HTTP hardening.** Lists are paged (at most 100 per page). Login and registration are rate limited
+  per IP, everything else per user; over the limit the API answers `429` with `Retry-After`. Every
+  response carries security headers (`nosniff`, frame denial, a strict CSP), CORS allows only the
+  configured origins, and Kestrel caps request bodies at 64 KB.
 - **Consistent errors.** Every error, including the ones the framework raises (unknown route,
   malformed JSON, missing token, 405, 415), is an RFC 9457 ProblemDetails with `errorCodes` and a `traceId`.
 - **Tests per layer.** Unit tests, integration tests against a real SQL Server (Testcontainers),
@@ -75,9 +79,9 @@ error cases included.
 
 | Method | Route | Token | Success | Errors |
 |---|---|---|---|---|
-| `POST` | `/api/users` | no | `201` with `Location` | `400` validation, `409 User.DuplicateEmail` |
-| `POST` | `/api/auth/login` | no | `200` access token | `400` validation, `401 Auth.InvalidCredentials` |
-| `GET` | `/api/users` | admin | `200` list ordered by creation date | `401 Request.Unauthorized`, `403 Auth.Forbidden` |
+| `POST` | `/api/users` | no | `201` with `Location` | `400` validation, `409 User.DuplicateEmail`, `429` |
+| `POST` | `/api/auth/login` | no | `200` access token | `400` validation, `401 Auth.InvalidCredentials`, `429` |
+| `GET` | `/api/users?page=1&pageSize=20` | admin | `200` one page, oldest first | `400 Paging.*`, `401 Request.Unauthorized`, `403 Auth.Forbidden` |
 | `GET` | `/api/users/{id}` | owner or admin | `200` the user | `400 User.InvalidId`, `401`, `403 Auth.Forbidden`, `404 User.NotFound` |
 
 ```http
@@ -104,6 +108,8 @@ Content-Type: application/json
 GET /api/users
 Authorization: Bearer eyJhbGciOi...
 ```
+
+A list answers one page: `{ "items": [...], "page": 1, "pageSize": 20, "totalCount": 42, "totalPages": 3 }`.
 
 In Swagger UI, use the **Authorize** button. A wrong password and an unknown email get the same
 `401 Auth.InvalidCredentials`, so the API never reveals which emails have an account. A missing,
@@ -160,6 +166,9 @@ More detail:
 | `Jwt:SigningKey` | at least 32 bytes; signs and validates tokens | none outside Development |
 | `Jwt:Issuer`, `Jwt:Audience` | token issuer and audience | `CqrsApiExample`, `CqrsApiExample.Api` |
 | `Jwt:AccessTokenLifetime` | `hh:mm:ss` | `00:30:00` |
+| `RateLimiting:Global` | `PermitLimit`, `Window` per user (or IP) | `300` per `00:01:00` |
+| `RateLimiting:Authentication` | login and registration, per IP | `10` per `00:01:00` |
+| `Cors:AllowedOrigins` | browser origins allowed to call the API | none |
 
 The signing key is like the connection string: not in `appsettings.json`, so every environment
 must provide its own (`Jwt__SigningKey`), and the API refuses to start without a valid one.

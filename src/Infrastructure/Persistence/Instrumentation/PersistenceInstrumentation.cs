@@ -8,7 +8,7 @@ namespace CqrsApiExample.Infrastructure.Persistence.Instrumentation;
 /// <summary>
 ///     Times every persistence call, whichever provider serves it, so EF Core and
 ///     ADO.NET are measured the same way. Each call is logged
-///     (<c>Persistence Ado UserQueries.GetAll succeeded in 1.234 ms</c>) and
+///     (<c>Persistence Ado UserQueries.GetPage succeeded in 1.234 ms</c>) and
 ///     recorded in the <see cref="DurationInstrumentName"/> histogram of the
 ///     <see cref="MeterName"/> meter, tagged with provider, operation and outcome
 ///     (watch it live with <c>dotnet-counters monitor -n CqrsApiExample.Api --counters CqrsApiExample.Persistence</c>).

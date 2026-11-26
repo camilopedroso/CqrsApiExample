@@ -1,4 +1,5 @@
 using BenchmarkDotNet.Attributes;
+using CqrsApiExample.Application.Common.Paging;
 using CqrsApiExample.Application.Users;
 using CqrsApiExample.Infrastructure.Persistence;
 using CqrsApiExample.Infrastructure.Persistence.Ado;
@@ -16,6 +17,9 @@ namespace CqrsApiExample.Persistence.Benchmarks;
 /// </summary>
 public class ReadBenchmarks
 {
+    // The largest page the API allows, so the list read still maps as many rows as it can.
+    private const int PageSize = PagedResult<UserDto>.MaxPageSize;
+
     private DbContextOptions<ApplicationDbContext> _efCoreOptions = null!;
     private SqlConnectionFactory _connections = null!;
     private Guid _existingId;
@@ -35,17 +39,17 @@ public class ReadBenchmarks
     }
 
     [Benchmark(Baseline = true, Description = "EFCore")]
-    [BenchmarkCategory("UserQueries.GetAll")]
-    public async Task<List<UserDto>> GetAll_EfCore()
+    [BenchmarkCategory("UserQueries.GetPage")]
+    public async Task<PagedResult<UserDto>> GetPage_EfCore()
     {
         await using var context = new ApplicationDbContext(_efCoreOptions);
-        return await new UserQueries(context).GetAllAsync(CancellationToken.None);
+        return await new UserQueries(context).GetPageAsync(1, PageSize, CancellationToken.None);
     }
 
     [Benchmark(Description = "ADO.NET")]
-    [BenchmarkCategory("UserQueries.GetAll")]
-    public Task<List<UserDto>> GetAll_Ado() =>
-        new AdoUserQueries(_connections).GetAllAsync(CancellationToken.None);
+    [BenchmarkCategory("UserQueries.GetPage")]
+    public Task<PagedResult<UserDto>> GetPage_Ado() =>
+        new AdoUserQueries(_connections).GetPageAsync(1, PageSize, CancellationToken.None);
 
     [Benchmark(Baseline = true, Description = "EFCore")]
     [BenchmarkCategory("UserQueries.GetById")]

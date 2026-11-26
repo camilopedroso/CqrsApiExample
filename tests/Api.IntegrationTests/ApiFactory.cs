@@ -90,6 +90,10 @@ public sealed class ApiFactory(string connectionString,
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:Database", connectionString);
         builder.UseSetting("Logging:LogLevel:Default", "Warning");
+        // The tests share one client address (TestServer has none), so the real limits would trip
+        // them; RateLimitingTests sets low ones on purpose.
+        builder.UseSetting("RateLimiting:Global:PermitLimit", "100000");
+        builder.UseSetting("RateLimiting:Authentication:PermitLimit", "100000");
         foreach (var (key, value) in settings ?? new Dictionary<string, string?>())
         {
             builder.UseSetting(key, value);

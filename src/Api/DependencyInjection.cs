@@ -1,15 +1,21 @@
+using System.Security.Claims;
+using System.Threading.RateLimiting;
 using CqrsApiExample.Api.Common.Authentication;
 using CqrsApiExample.Api.Common.Errors;
 using CqrsApiExample.Api.Common.OpenApi;
+using CqrsApiExample.Api.Common.Security;
 using CqrsApiExample.Application.Common.Interfaces.Authentication;
 using CqrsApiExample.Domain.Common.Results;
 using CqrsApiExample.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Net.Http.Headers;
 
 namespace CqrsApiExample.Api;
 
@@ -28,11 +34,16 @@ public static class DependencyInjection
     // ProblemDetails extension that carries the error codes on every problem response.
     private const string ErrorCodesKey = "errorCodes";
 
+    // Configuration key of the browser origins allowed by CORS (an array).
+    private const string AllowedOriginsKey = "Cors:AllowedOrigins";
+
     public static IServiceCollection AddPresentation(this IServiceCollection services)
     {
         AddControllers(services);
         AddErrorResponses(services);
         AddAuthentication(services);
+        AddRateLimiting(services);
+        AddCors(services);
 
         // The OpenAPI document; Program.cs maps it (/openapi/v1.json) and the Swagger UI in Development.
         // The transformers describe the bearer token, so Swagger UI shows an "Authorize" button.
@@ -43,6 +54,88 @@ public static class DependencyInjection
         });
 
         return services;
+    }
+
+    /// <summary>
+    ///     Requests per client and window (<see cref="RateLimitingOptions"/>, section <c>RateLimiting</c>):
+    ///     a generous global limit per user or IP, and a strict one per IP on login and registration
+    ///     (<c>[EnableRateLimiting(RateLimitingPolicies.Authentication)]</c>). Over the limit: 429 with
+    ///     <c>Retry-After</c>, and a ProblemDetails body with <c>Request.TooManyRequests</c>.
+    /// </summary>
+    private static void AddRateLimiting(IServiceCollection services)
+    {
+        services.AddOptions<RateLimitingOptions>()
+                .BindConfiguration(RateLimitingOptions.SectionName);
+
+        services.AddRateLimiter(_ => { });
+
+        // Configured from RateLimitingOptions when first used, so tests can change the limits.
+        services.AddOptions<RateLimiterOptions>()
+                .Configure<IOptions<RateLimitingOptions>>(ConfigureRateLimiter);
+
+        static void ConfigureRateLimiter(RateLimiterOptions limiter, IOptions<RateLimitingOptions> rateLimitingOptions)
+        {
+            RateLimitingOptions limits = rateLimitingOptions.Value;
+            FixedWindowRateLimiterOptions globalLimit = limits.Global.ToLimiterOptions();
+            FixedWindowRateLimiterOptions authenticationLimit = limits.Authentication.ToLimiterOptions();
+
+            limiter.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            limiter.OnRejected = RateLimitRejection.OnRejectedAsync;
+
+            // Every request counts here, keyed by the signed-in user, or by IP when anonymous.
+            limiter.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(GlobalPartition);
+
+            // Login and registration count here as well, keyed by IP: a password guesser has no token.
+            limiter.AddPolicy(RateLimitingPolicies.Authentication, AuthenticationPartition);
+
+            RateLimitPartition<string> GlobalPartition(HttpContext context)
+            {
+                string? userId = context.User.FindFirstValue(AccessTokenClaims.Subject);
+                string key = userId is null ? $"ip:{ClientAddress(context)}" : $"user:{userId}";
+
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => globalLimit);
+            }
+
+            RateLimitPartition<string> AuthenticationPartition(HttpContext context)
+            {
+                string key = ClientAddress(context);
+
+                return RateLimitPartition.GetFixedWindowLimiter(key, _ => authenticationLimit);
+            }
+        }
+
+        // No address in tests (TestServer): all such requests share one partition.
+        static string ClientAddress(HttpContext context) =>
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+    }
+
+    /// <summary>
+    ///     Which browser origins may call the API (<c>Cors:AllowedOrigins</c>, an array; none by default).
+    ///     Only what a client needs: GET and POST, the <c>Authorization</c> and <c>Content-Type</c> headers,
+    ///     and reading <c>Location</c> and <c>Retry-After</c>. No credentials (cookies): the token travels
+    ///     in a header, so it is never sent by the browser on its own.
+    /// </summary>
+    /// <remarks>
+    ///     CORS only tells browsers what they may read; it protects nothing from other clients. With
+    ///     no origins configured, browsers on other sites simply can't call the API.
+    /// </remarks>
+    private static void AddCors(IServiceCollection services)
+    {
+        services.AddCors();
+
+        services.AddOptions<CorsOptions>()
+                .Configure<IConfiguration>(ConfigureCors);
+
+        static void ConfigureCors(CorsOptions cors, IConfiguration configuration)
+        {
+            string[] allowedOrigins = configuration.GetSection(AllowedOriginsKey).Get<string[]>() ?? [];
+
+            cors.AddDefaultPolicy(policy => policy.WithOrigins(allowedOrigins)
+                                                  .WithMethods(HttpMethods.Get, HttpMethods.Post)
+                                                  .WithHeaders(HeaderNames.Authorization, HeaderNames.ContentType)
+                                                  .WithExposedHeaders(HeaderNames.Location, HeaderNames.RetryAfter)
+                                                  .SetPreflightMaxAge(TimeSpan.FromMinutes(10)));
+        }
     }
 
     /// <summary>
@@ -167,7 +260,7 @@ public static class DependencyInjection
         int statusCode = problem.Status ?? context.HttpContext.Response.StatusCode;
         Error? error = RequestErrors.ForStatusCode(statusCode);
 
-        // Only 401, 403, 404, 405 and 415 have a request-level error; any other status keeps the problem as it is.
+        // Only 401, 403, 404, 405, 415 and 429 have a request-level error; any other status keeps the problem as it is.
         if (error is null)
         {
             return;

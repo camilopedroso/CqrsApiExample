@@ -124,12 +124,13 @@ public sealed class PersistenceTests(SqlServerFixture sqlServer) : IAsyncLifetim
         var queries = new UserQueries(readContext);
 
         // Act
-        var all = await queries.GetAllAsync(default);
+        var all = await queries.GetPageAsync(1, 20, default);
         var byId = await queries.GetByIdAsync(second.Id, default);
         var missing = await queries.GetByIdAsync(Guid.NewGuid(), default);
 
         // Assert
-        all.Should().Equal(UserDto.From(first), UserDto.From(second));
+        all.Items.Should().Equal(UserDto.From(first), UserDto.From(second));
+        all.TotalCount.Should().Be(2);
         byId.Should().Be(UserDto.From(second));
         missing.Should().BeNull();
         readContext.ChangeTracker.Entries().Should().BeEmpty();

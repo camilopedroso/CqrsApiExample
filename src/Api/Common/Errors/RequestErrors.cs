@@ -5,7 +5,7 @@ namespace CqrsApiExample.Api.Common.Errors;
 /// <summary>
 ///     Errors about the HTTP request itself, raised before any application
 ///     code runs (unbindable body, missing or invalid token, unknown route,
-///     wrong method or media type).
+///     wrong method or media type, too many requests).
 /// </summary>
 public static class RequestErrors
 {
@@ -29,6 +29,10 @@ public static class RequestErrors
     public static Error UnsupportedMediaType =>
         Error.Failure(code: "Request.UnsupportedMediaType", description: "The request content type is not supported.");
 
+    // Raised by the rate limiter; the Retry-After header says when to try again.
+    public static Error TooManyRequests =>
+        Error.Failure(code: "Request.TooManyRequests", description: "Too many requests. Try again later.");
+
     /// <summary>
     ///     Code for a problem response that the framework produced without an
     ///     application error, based on its status code.
@@ -40,6 +44,7 @@ public static class RequestErrors
         StatusCodes.Status404NotFound => NotFound,
         StatusCodes.Status405MethodNotAllowed => MethodNotAllowed,
         StatusCodes.Status415UnsupportedMediaType => UnsupportedMediaType,
+        StatusCodes.Status429TooManyRequests => TooManyRequests,
         _ => null
     };
 }

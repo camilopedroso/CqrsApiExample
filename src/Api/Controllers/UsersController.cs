@@ -1,13 +1,17 @@
 using CqrsApiExample.Api.Common.Mapping;
+using CqrsApiExample.Api.Common.Security;
 using CqrsApiExample.Application.Common.Messaging;
+using CqrsApiExample.Application.Common.Paging;
 using CqrsApiExample.Application.Users;
 using CqrsApiExample.Application.Users.Commands.CreateUser;
 using CqrsApiExample.Application.Users.Queries.GetAllUsers;
 using CqrsApiExample.Application.Users.Queries.GetUserById;
+using CqrsApiExample.Contracts.Common;
 using CqrsApiExample.Contracts.User;
 using CqrsApiExample.Domain.Common.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CqrsApiExample.Api.Controllers;
 
@@ -56,25 +60,31 @@ namespace CqrsApiExample.Api.Controllers;
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
 public class UsersController : ApiControllerBase
 {
-    /// <summary>GET /api/users: every user. Administrators only: 403 Auth.Forbidden for anyone else, 401 without a valid token.</summary>
+    /// <summary>
+    ///     GET /api/users?page=&amp;pageSize=: one page of users, oldest first (20 per page by default,
+    ///     at most 100). Administrators only: 403 Auth.Forbidden for anyone else, 401 without a valid
+    ///     token, 400 Paging.* for a page or page size out of range.
+    /// </summary>
     [HttpGet]
-    [ProducesResponseType<IEnumerable<UserResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<PagedResponse<UserResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
     public async Task<IActionResult> GetUsers(
+        [FromQuery] PageRequest paging,
         // Resolved from DI for this request, not read from the HTTP request (see the class remarks).
-        [FromServices] IRequestHandler<GetAllUsersQuery, Result<List<UserDto>>> handler,
+        [FromServices] IRequestHandler<GetAllUsersQuery, Result<PagedResult<UserDto>>> handler,
         CancellationToken cancellationToken)
     {
-        GetAllUsersQuery query = new();
+        GetAllUsersQuery query = new(paging.Page, paging.PageSize);
 
-        Result<List<UserDto>> result = await handler.Handle(query, cancellationToken);
+        Result<PagedResult<UserDto>> result = await handler.Handle(query, cancellationToken);
 
         return result.Match(ToOkResponse, errors => Problem(errors));
 
-        IActionResult ToOkResponse(List<UserDto> users)
+        IActionResult ToOkResponse(PagedResult<UserDto> page)
         {
-            List<UserResponse> response = [.. users.Select(user => user.ToResponse())];
+            PagedResponse<UserResponse> response = page.ToResponse(user => user.ToResponse());
 
             return Ok(response);
         }
@@ -117,9 +127,12 @@ public class UsersController : ApiControllerBase
     /// </summary>
     [HttpPost]
     [AllowAnonymous]
+    // Same strict per-IP limit as the login: registration also hashes a password.
+    [EnableRateLimiting(RateLimitingPolicies.Authentication)]
     [ProducesResponseType<UserResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests, "application/problem+json")]
     public async Task<IActionResult> CreateUser(
         CreateUserRequest request,
         [FromServices] IRequestHandler<CreateUserCommand, Result<UserDto>> handler,

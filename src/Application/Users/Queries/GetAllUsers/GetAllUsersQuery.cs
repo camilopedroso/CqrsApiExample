@@ -1,30 +1,28 @@
 using CqrsApiExample.Application.Common.Authorization;
 using CqrsApiExample.Application.Common.Messaging;
+using CqrsApiExample.Application.Common.Paging;
 using CqrsApiExample.Domain.Common.Results;
 
 namespace CqrsApiExample.Application.Users.Queries.GetAllUsers;
 
-/// <summary>Lists every user, oldest first.</summary>
+/// <summary>Lists users, oldest first, one page at a time.</summary>
 /// <remarks>
 ///     <para>
-///         It has no parameters, but it is still a type: the request type is what picks the handler
-///         (<c>IRequestHandler&lt;GetAllUsersQuery, ...&gt;</c>) and what the logging decorator writes
-///         as the request name. <c>UsersController</c> creates it with <c>new()</c> for
-///         <c>GET /api/users</c>.
+///         <c>UsersController</c> builds it from the query string of <c>GET /api/users?page=&amp;pageSize=</c>.
+///         <see cref="GetAllUsersQueryValidator" /> keeps the page at 1 or more and the page size between
+///         1 and <see cref="PagedResult{T}.MaxPageSize" />, so no request can pull the whole table.
 ///     </para>
 ///     <para>
-///         A query, so it lives in <c>.Queries.</c> and its handler reads through
-///         <c>IUserQueries</c> only. It has no validator (there is no input to check), so the
-///         validation decorator passes it straight through.
-///     </para>
-///     <para>
-///         The response is <c>Result&lt;List&lt;UserDto&gt;&gt;</c> even though it never fails today
-///         (no users is an empty list, not an error): the decorators require every request to
-///         answer with a <c>Result&lt;T&gt;</c>. There is no paging yet, so it returns the whole table.
+///         A query, so it lives in <c>.Queries.</c> and its handler reads through <c>IUserQueries</c> only.
+///         A page past the last one is an empty page, not an error.
 ///     </para>
 ///     <para>
 ///         Administrators only (<see cref="IAdminOnlyRequest" />): the list holds every user's email.
 ///         Anyone else gets <c>Auth.Forbidden</c> (403) from <c>AuthorizationDecorator</c>.
 ///     </para>
 /// </remarks>
-public sealed record GetAllUsersQuery : IQuery<Result<List<UserDto>>>, IAdminOnlyRequest;
+/// <param name="Page">The page number, starting at 1.</param>
+/// <param name="PageSize">How many users per page, at most <see cref="PagedResult{T}.MaxPageSize" />.</param>
+public sealed record GetAllUsersQuery(int Page = PagedResult<UserDto>.FirstPage,
+                                      int PageSize = PagedResult<UserDto>.DefaultPageSize)
+    : IQuery<Result<PagedResult<UserDto>>>, IAdminOnlyRequest;

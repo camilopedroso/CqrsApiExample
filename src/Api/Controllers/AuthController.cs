@@ -1,4 +1,5 @@
 using CqrsApiExample.Api.Common.Mapping;
+using CqrsApiExample.Api.Common.Security;
 using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Auth.Commands.Login;
 using CqrsApiExample.Application.Common.Messaging;
@@ -6,6 +7,7 @@ using CqrsApiExample.Contracts.Auth;
 using CqrsApiExample.Domain.Common.Results;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace CqrsApiExample.Api.Controllers;
 
@@ -20,6 +22,8 @@ namespace CqrsApiExample.Api.Controllers;
 /// </remarks>
 [Route("api/[controller]")]
 [AllowAnonymous]
+// Strict per-IP limit: every attempt runs the slow password hasher, and bursts are how passwords get guessed.
+[EnableRateLimiting(RateLimitingPolicies.Authentication)]
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
 public class AuthController : ApiControllerBase
 {
@@ -32,6 +36,7 @@ public class AuthController : ApiControllerBase
     [ProducesResponseType<AccessTokenResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests, "application/problem+json")]
     public async Task<IActionResult> Login(
         LoginRequest request,
         [FromServices] IRequestHandler<LoginCommand, Result<AccessTokenDto>> handler,

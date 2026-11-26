@@ -36,7 +36,7 @@ public sealed class ValidationDecorator<TRequest, TResult>(
                                                 where TResult : IFailureResult<TResult>
 {
     // The validator is optional: validators are found by assembly scanning, and a request
-    // without one (e.g. GetAllUsersQuery) has nothing registered. ActivatorUtilities then
+    // without one has nothing registered. ActivatorUtilities then
     // falls back to the default value, null, instead of failing.
 
     public async Task<TResult> Handle(TRequest request, CancellationToken cancellationToken)

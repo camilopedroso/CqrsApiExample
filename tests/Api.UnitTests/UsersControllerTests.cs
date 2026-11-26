@@ -1,9 +1,11 @@
 using CqrsApiExample.Api.Controllers;
 using CqrsApiExample.Application.Common.Messaging;
+using CqrsApiExample.Application.Common.Paging;
 using CqrsApiExample.Application.Users;
 using CqrsApiExample.Application.Users.Commands.CreateUser;
 using CqrsApiExample.Application.Users.Queries.GetAllUsers;
 using CqrsApiExample.Application.Users.Queries.GetUserById;
+using CqrsApiExample.Contracts.Common;
 using CqrsApiExample.Contracts.User;
 using CqrsApiExample.Domain.Common.DomainErrors;
 using CqrsApiExample.Domain.Common.Results;
@@ -18,7 +20,7 @@ public class UsersControllerTests
 {
     // Each action receives its handler as a parameter, just like [FromServices] does at runtime.
     private readonly UsersController _controller = new();
-    private readonly Mock<IRequestHandler<GetAllUsersQuery, Result<List<UserDto>>>> _getAllUsers = new();
+    private readonly Mock<IRequestHandler<GetAllUsersQuery, Result<PagedResult<UserDto>>>> _getAllUsers = new();
     private readonly Mock<IRequestHandler<GetUserByIdQuery, Result<UserDto>>> _getUserById = new();
     private readonly Mock<IRequestHandler<CreateUserCommand, Result<UserDto>>> _createUser = new();
 
@@ -28,18 +30,22 @@ public class UsersControllerTests
     {
         // Arrange
         List<UserDto> usersList = GetUsers();
-        _getAllUsers.Setup(h => h.Handle(It.IsAny<GetAllUsersQuery>(), It.IsAny<CancellationToken>()))
-                     .ReturnsAsync(usersList);
+        _getAllUsers.Setup(h => h.Handle(new GetAllUsersQuery(2, 5), It.IsAny<CancellationToken>()))
+                     .ReturnsAsync(new PagedResult<UserDto>(usersList, 2, 5, 12));
 
         // Act
-        var result = await _controller.GetUsers(_getAllUsers.Object, CancellationToken.None);
+        var result = await _controller.GetUsers(new PageRequest { Page = 2, PageSize = 5 }, _getAllUsers.Object, CancellationToken.None);
 
         // Assert
         result.GetType().Should().Be(typeof(OkObjectResult));
         var okResult = (OkObjectResult)result;
         okResult.Should().NotBeNull();
-        okResult.Value.Should().BeAssignableTo<IEnumerable<UserResponse>>();
-        UserResponse[] users = ((IEnumerable<UserResponse>)okResult.Value!).ToArray();
+        var page = okResult.Value.Should().BeOfType<PagedResponse<UserResponse>>().Subject;
+        page.Page.Should().Be(2);
+        page.PageSize.Should().Be(5);
+        page.TotalCount.Should().Be(12);
+        page.TotalPages.Should().Be(3);
+        UserResponse[] users = [.. page.Items];
         users.Should().HaveCount(usersList.Count);
         for (int i = 0; i < usersList.Count; i++)
         {
@@ -59,7 +65,7 @@ public class UsersControllerTests
                      .ReturnsAsync(Errors.Generic.Ops);
 
         // Act
-        var result = await _controller.GetUsers(_getAllUsers.Object, CancellationToken.None);
+        var result = await _controller.GetUsers(new PageRequest { Page = 2, PageSize = 5 }, _getAllUsers.Object, CancellationToken.None);
 
         // Assert
         result.GetType().Should().Be(typeof(ObjectResult));

@@ -1,4 +1,5 @@
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
+using CqrsApiExample.Application.Common.Paging;
 using CqrsApiExample.Application.Users;
 using CqrsApiExample.Infrastructure.Persistence;
 using CqrsApiExample.Infrastructure.Persistence.Decorators;
@@ -28,19 +29,19 @@ public sealed class PersistenceInstrumentationTests : IDisposable
     public async Task Successful_Call_Should_Be_Logged_And_Recorded_With_Provider_And_Operation()
     {
         // Arrange
-        var users = new List<UserDto> { new(Guid.NewGuid(), "John", "Doe", "john@doe.com") };
-        _inner.Setup(queries => queries.GetAllAsync(It.IsAny<CancellationToken>())).ReturnsAsync(users);
+        var users = new PagedResult<UserDto>([new(Guid.NewGuid(), "John", "Doe", "john@doe.com")], 1, 20, 1);
+        _inner.Setup(queries => queries.GetPageAsync(1, 20, It.IsAny<CancellationToken>())).ReturnsAsync(users);
         var queries = CreateQueries(PersistenceProvider.Ado);
 
         // Act
-        var result = await queries.GetAllAsync(default);
+        var result = await queries.GetPageAsync(1, 20, default);
 
         // Assert
         result.Should().BeSameAs(users);
 
         var log = _logger.Collector.GetSnapshot().Should().ContainSingle().Subject;
         log.Level.Should().Be(LogLevel.Information);
-        log.Message.Should().StartWith("Persistence Ado UserQueries.GetAll succeeded in ").And.EndWith(" ms");
+        log.Message.Should().StartWith("Persistence Ado UserQueries.GetPage succeeded in ").And.EndWith(" ms");
 
         var measurement = OwnMeasurements().Should().ContainSingle().Subject;
         measurement.Value.Should().BeGreaterThanOrEqualTo(0);
@@ -75,12 +76,12 @@ public sealed class PersistenceInstrumentationTests : IDisposable
     public async Task Cancelled_Call_Should_Be_Recorded_As_Cancelled()
     {
         // Arrange
-        _inner.Setup(queries => queries.GetAllAsync(It.IsAny<CancellationToken>()))
+        _inner.Setup(queries => queries.GetPageAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
               .ThrowsAsync(new OperationCanceledException());
         var queries = CreateQueries(PersistenceProvider.Ado);
 
         // Act
-        var act = () => queries.GetAllAsync(default);
+        var act = () => queries.GetPageAsync(1, 20, default);
 
         // Assert
         await act.Should().ThrowAsync<OperationCanceledException>();
@@ -99,5 +100,5 @@ public sealed class PersistenceInstrumentationTests : IDisposable
     private IEnumerable<CollectedMeasurement<double>> OwnMeasurements() =>
         _metrics.GetMeasurementSnapshot()
                 .Where(measurement => measurement.Tags.TryGetValue("operation", out var operation)
-                                      && operation is "UserQueries.GetAll" or "UserQueries.GetById");
+                                      && operation is "UserQueries.GetPage" or "UserQueries.GetById");
 }

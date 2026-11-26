@@ -1,6 +1,7 @@
 using System.Net;
 using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
+using CqrsApiExample.Application.Common.Paging;
 using CqrsApiExample.Application.Users;
 using CqrsApiExample.Domain.UserAggregate;
 using FluentAssertions;
@@ -32,7 +33,7 @@ public sealed class UnexpectedErrorTests(ApiFixture api)
     {
         public const string Message = "The read database is unavailable.";
 
-        public Task<List<UserDto>> GetAllAsync(CancellationToken cancellationToken) =>
+        public Task<PagedResult<UserDto>> GetPageAsync(int page, int pageSize, CancellationToken cancellationToken) =>
             throw new InvalidOperationException(Message);
 
         public Task<UserDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>

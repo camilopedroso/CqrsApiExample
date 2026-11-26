@@ -55,16 +55,23 @@ Content-Type: application/json
 #  2. Reading users (CQRS read side: projections straight to a read model)
 # =============================================================================
 
-### 2.1 List users
-#   200, ordered by creation date. The seed user (Jane Doe) is created at
-#   startup in Development.
+### 2.1 List users (first page)
+#   200 { items, page, pageSize, totalCount, totalPages }, oldest first, 20 per
+#   page by default. The seed user (Jane Doe) is created at startup in
+#   Development, so she opens the first page.
 # @name listUsers
 GET {{api}}/users
 Authorization: Bearer {{login.response.body.accessToken}}
 
-### 2.2 Get one user by id (needs: listUsers)
+### 2.2 Another page: ?page=2&pageSize=1 (1 to 100 per page)
+#   A page past the last one is empty, not an error. page=0 or pageSize=101
+#   answer 400 Paging.InvalidPage / Paging.InvalidPageSize.
+GET {{api}}/users?page=2&pageSize=1
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### 2.3 Get one user by id (needs: listUsers)
 #   200 with the same fields as in the list.
-GET {{api}}/users/{{listUsers.response.body.$[0].id}}
+GET {{api}}/users/{{listUsers.response.body.$.items[0].id}}
 Authorization: Bearer {{login.response.body.accessToken}}
 
 
@@ -156,7 +163,7 @@ Authorization: Bearer {{memberLogin.response.body.accessToken}}
 
 ### 4.7 ...but nobody else: 403 Auth.Forbidden (needs: listUsers, memberLogin)
 #   Also 403, not 404, for an id that doesn't exist: the answer never confirms an id.
-GET {{api}}/users/{{listUsers.response.body.$[0].id}}
+GET {{api}}/users/{{listUsers.response.body.$.items[0].id}}
 Authorization: Bearer {{memberLogin.response.body.accessToken}}
 
 
@@ -305,7 +312,7 @@ Ada Lovelace
 #   The "Allow" response header lists what is supported (GET).
 #   With a token: without one, every endpoint that isn't anonymous (including an
 #   unknown route or method) answers 401 first, so nothing is revealed to anonymous callers.
-DELETE {{api}}/users/{{listUsers.response.body.$[0].id}}
+DELETE {{api}}/users/{{listUsers.response.body.$.items[0].id}}
 Authorization: Bearer {{login.response.body.accessToken}}
 
 ### 7.4 No token: 401 Request.Unauthorized
@@ -363,3 +370,15 @@ Authorization: Bearer not.a.token
 #      that already succeeded are never run again for the same message.
 #      If the API stops before sending, the message is still there and is sent
 #      when the API starts again.
+#
+#  8.5 Rate limits: 429 Request.TooManyRequests with Retry-After
+#      Login and registration allow 10 requests per minute per IP address
+#      (RateLimiting:Authentication); run 1.2 eleven times in a row and the
+#      last answer is 429. Every other request counts against a per-user (or
+#      per-IP when anonymous) limit of 300 per minute.
+#
+#  8.6 Security headers
+#      Every response carries X-Content-Type-Options: nosniff,
+#      X-Frame-Options: DENY, Referrer-Policy: no-referrer and a
+#      Content-Security-Policy (except /swagger, whose page needs scripts).
+#      Outside Development, HSTS is added too.

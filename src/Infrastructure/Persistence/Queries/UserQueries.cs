@@ -1,5 +1,6 @@
 using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
+using CqrsApiExample.Application.Common.Paging;
 using CqrsApiExample.Application.Users;
 using Microsoft.EntityFrameworkCore;
 
@@ -11,13 +12,26 @@ namespace CqrsApiExample.Infrastructure.Persistence.Queries;
 /// </summary>
 internal sealed class UserQueries(ApplicationDbContext context) : IUserQueries
 {
-    public Task<List<UserDto>> GetAllAsync(CancellationToken cancellationToken)
+    // Two round trips (COUNT, then the page). Id breaks ties between users created in the same
+    // instant, so a user never shows up on two pages or on none.
+    public async Task<PagedResult<UserDto>> GetPageAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
-        return context.Users
-                      .AsNoTracking()
-                      .OrderBy(u => u.CreatedAt)
-                      .Select(u => new UserDto(u.Id, u.Name, u.Surname, u.Email))
-                      .ToListAsync(cancellationToken);
+        int totalCount = await context.Users.CountAsync(cancellationToken);
+
+        int offset = PagedResult<UserDto>.Offset(page, pageSize);
+
+        List<UserDto> users = await context.Users
+                                           .AsNoTracking()
+                                           .OrderBy(u => u.CreatedAt)
+                                           .ThenBy(u => u.Id)
+                                           .Skip(offset)
+                                           .Take(pageSize)
+                                           .Select(u => new UserDto(u.Id, u.Name, u.Surname, u.Email))
+                                           .ToListAsync(cancellationToken);
+
+        PagedResult<UserDto> result = new(users, page, pageSize, totalCount);
+
+        return result;
     }
 
     public Task<UserDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken)

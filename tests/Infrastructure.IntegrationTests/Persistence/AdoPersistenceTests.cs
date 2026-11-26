@@ -169,12 +169,13 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
         var queries = _database.CreateAdoScope(_mode).Queries;
 
         // Act
-        var all = await queries.GetAllAsync(default);
+        var all = await queries.GetPageAsync(1, 20, default);
         var byId = await queries.GetByIdAsync(second.Id, default);
         var missing = await queries.GetByIdAsync(Guid.NewGuid(), default);
 
         // Assert
-        all.Should().Equal(UserDto.From(first), UserDto.From(second));
+        all.Items.Should().Equal(UserDto.From(first), UserDto.From(second));
+        all.TotalCount.Should().Be(2);
         byId.Should().Be(UserDto.From(second));
         missing.Should().BeNull();
     }
@@ -190,11 +191,44 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
         await using var context = _database.CreateContext();
 
         // Act
-        var fromAdo = await _database.CreateAdoScope(_mode).Queries.GetAllAsync(default);
-        var fromEfCore = await new UserQueries(context).GetAllAsync(default);
+        var fromAdo = await _database.CreateAdoScope(_mode).Queries.GetPageAsync(1, 20, default);
+        var fromEfCore = await new UserQueries(context).GetPageAsync(1, 20, default);
 
         // Assert
-        fromAdo.Should().Equal(fromEfCore);
+        fromAdo.Should().BeEquivalentTo(fromEfCore, options => options.WithStrictOrdering());
+    }
+
+    [Fact]
+    [Trait("Category", "Persistence")]
+    public async Task GetPageAsync_Should_Page_Like_EF_Core()
+    {
+        // Arrange: five users, two of them created in the same instant (the tie is broken by Id)
+        for (var i = 0; i < 5; i++)
+        {
+            await AddUserAsync(User.Create("User", $"{i}", $"user{i}@doe.com", "hashed-password").Value);
+            if (i != 2)
+            {
+                _database.Clock.Advance(TimeSpan.FromMinutes(1));
+            }
+        }
+
+        await using var context = _database.CreateContext();
+        var ado = _database.CreateAdoScope(_mode).Queries;
+        var efCore = new UserQueries(context);
+
+        // Act & Assert: same pages from both, every user exactly once, and an empty page past the end
+        List<Guid> seen = [];
+        for (var page = 1; page <= 4; page++)
+        {
+            var fromAdo = await ado.GetPageAsync(page, 2, default);
+            var fromEfCore = await efCore.GetPageAsync(page, 2, default);
+            fromAdo.Should().BeEquivalentTo(fromEfCore, options => options.WithStrictOrdering());
+            fromAdo.TotalCount.Should().Be(5);
+            fromAdo.TotalPages.Should().Be(3);
+            seen.AddRange(fromAdo.Items.Select(user => user.Id));
+        }
+
+        seen.Should().HaveCount(5).And.OnlyHaveUniqueItems();
     }
 
     [Fact]

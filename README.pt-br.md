@@ -34,6 +34,10 @@ domínio entregues por um outbox transacional, dois provedores de persistência 
   mesmos, administradores leem qualquer um. Um membro recebe `403` para o id de outra pessoa, exista
   ele ou não, então a resposta nunca confirma um id.
   Cada linha registra quem a criou e alterou por último (`CreatedBy`/`ModifiedBy`), a partir do mesmo token.
+- **HTTP endurecido.** Listas são paginadas (no máximo 100 por página). Login e cadastro têm limite
+  de requisições por IP, o resto por usuário; acima do limite a API responde `429` com `Retry-After`.
+  Toda resposta leva headers de segurança (`nosniff`, bloqueio de frames, uma CSP restrita), o CORS só
+  libera as origens configuradas e o Kestrel limita o corpo das requisições a 64 KB.
 - **Erros consistentes.** Todo erro, inclusive os que o framework gera (rota inexistente, JSON
   malformado, token ausente, 405, 415), é um ProblemDetails (RFC 9457) com `errorCodes` e um `traceId`.
 - **Testes por camada.** Testes unitários, testes de integração contra um SQL Server real
@@ -78,9 +82,9 @@ incluindo os casos de erro.
 
 | Método | Rota | Token | Sucesso | Erros |
 |---|---|---|---|---|
-| `POST` | `/api/users` | não | `201` com `Location` | `400` validação, `409 User.DuplicateEmail` |
-| `POST` | `/api/auth/login` | não | `200` access token | `400` validação, `401 Auth.InvalidCredentials` |
-| `GET` | `/api/users` | admin | `200` lista ordenada pela data de criação | `401 Request.Unauthorized`, `403 Auth.Forbidden` |
+| `POST` | `/api/users` | não | `201` com `Location` | `400` validação, `409 User.DuplicateEmail`, `429` |
+| `POST` | `/api/auth/login` | não | `200` access token | `400` validação, `401 Auth.InvalidCredentials`, `429` |
+| `GET` | `/api/users?page=1&pageSize=20` | admin | `200` uma página, mais antigos primeiro | `400 Paging.*`, `401 Request.Unauthorized`, `403 Auth.Forbidden` |
 | `GET` | `/api/users/{id}` | dono ou admin | `200` o usuário | `400 User.InvalidId`, `401`, `403 Auth.Forbidden`, `404 User.NotFound` |
 
 ```http
@@ -107,6 +111,8 @@ Content-Type: application/json
 GET /api/users
 Authorization: Bearer eyJhbGciOi...
 ```
+
+Uma lista responde uma página: `{ "items": [...], "page": 1, "pageSize": 20, "totalCount": 42, "totalPages": 3 }`.
 
 No Swagger UI, use o botão **Authorize**. Senha errada e email desconhecido recebem o mesmo
 `401 Auth.InvalidCredentials`, então a API nunca revela quais emails têm conta. Um token ausente,
@@ -164,6 +170,9 @@ Mais detalhes:
 | `Jwt:SigningKey` | pelo menos 32 bytes; assina e valida os tokens | nenhum fora de Development |
 | `Jwt:Issuer`, `Jwt:Audience` | emissor e audiência do token | `CqrsApiExample`, `CqrsApiExample.Api` |
 | `Jwt:AccessTokenLifetime` | `hh:mm:ss` | `00:30:00` |
+| `RateLimiting:Global` | `PermitLimit`, `Window` por usuário (ou IP) | `300` por `00:01:00` |
+| `RateLimiting:Authentication` | login e cadastro, por IP | `10` por `00:01:00` |
+| `Cors:AllowedOrigins` | origens de navegador que podem chamar a API | nenhuma |
 
 A chave de assinatura é como a connection string: não está no `appsettings.json`, então cada
 ambiente precisa fornecer a sua (`Jwt__SigningKey`), e a API não inicia sem uma chave válida.

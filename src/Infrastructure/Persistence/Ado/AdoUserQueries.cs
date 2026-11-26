@@ -1,6 +1,7 @@
 using System.Data;
 using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
+using CqrsApiExample.Application.Common.Paging;
 using CqrsApiExample.Application.Users;
 using CqrsApiExample.Domain.UserAggregate;
 using Microsoft.Data.SqlClient;
@@ -23,8 +24,14 @@ internal sealed class AdoUserQueries(SqlConnectionFactory connections) : IUserQu
     // Built at compile time from constants. The table is qualified with its schema (never dbo).
     private const string SelectColumns = $"SELECT [Id], [Name], [Surname], [Email] FROM [{Schemas.Accounts}].[Users]";
 
-    // Oldest first, like UserQueries. CreatedAt is the clustered index, so the rows are already in this order.
-    private const string GetAllSql = $"{SelectColumns} ORDER BY [CreatedAt]";
+    // One command, one round trip, two result sets: the total count, then the page. Oldest first,
+    // like UserQueries (CreatedAt is the clustered index), with Id to break ties so a user never
+    // appears on two pages. OFFSET/FETCH is SQL Server's paging; EF Core generates the same.
+    private const string GetPageSql =
+        $"""
+         SELECT COUNT(*) FROM [{Schemas.Accounts}].[Users];
+         {SelectColumns} ORDER BY [CreatedAt], [Id] OFFSET @Offset ROWS FETCH NEXT @PageSize ROWS ONLY;
+         """;
 
     // Uses the (non-clustered) primary key.
     private const string GetByIdSql = $"{SelectColumns} WHERE [Id] = @Id";
@@ -43,17 +50,34 @@ internal sealed class AdoUserQueries(SqlConnectionFactory connections) : IUserQu
     private const int PasswordHashOrdinal = 1;
     private const int RoleOrdinal = 2;
 
-    public Task<List<UserDto>> GetAllAsync(CancellationToken cancellationToken)
+    public Task<PagedResult<UserDto>> GetPageAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
         // Reads change nothing, so retrying the whole attempt after a transient failure is safe.
-        return AdoRetry.ExecuteAsync(GetAllOnceAsync, cancellationToken);
+        return AdoRetry.ExecuteAsync(GetPageOnceAsync, cancellationToken);
 
-        async Task<List<UserDto>> GetAllOnceAsync(CancellationToken token)
+        async Task<PagedResult<UserDto>> GetPageOnceAsync(CancellationToken token)
         {
             // Pooled connection, opened for this query and returned to the pool at the end.
             await using SqlConnection connection = await connections.OpenAsync(token);
-            await using SqlCommand command = new(GetAllSql, connection);
+            await using SqlCommand command = new(GetPageSql, connection);
+
+            int offset = PagedResult<UserDto>.Offset(page, pageSize);
+
+            SqlParameter[] parameters =
+            [
+                new("@Offset", SqlDbType.Int) { Value = offset },
+                new("@PageSize", SqlDbType.Int) { Value = pageSize }
+            ];
+            command.Parameters.AddRange(parameters);
+
             await using SqlDataReader reader = await command.ExecuteReaderAsync(token);
+
+            // First result set: the total count (one row, one column).
+            await reader.ReadAsync(token);
+            int totalCount = reader.GetInt32(0);
+
+            // Second result set: the page itself.
+            await reader.NextResultAsync(token);
 
             List<UserDto> users = [];
 
@@ -64,7 +88,9 @@ internal sealed class AdoUserQueries(SqlConnectionFactory connections) : IUserQu
                 users.Add(user);
             }
 
-            return users;
+            PagedResult<UserDto> result = new(users, page, pageSize, totalCount);
+
+            return result;
         }
     }
 

@@ -1,4 +1,5 @@
 using CqrsApiExample.Application.Auth;
+using CqrsApiExample.Application.Common.Paging;
 using CqrsApiExample.Application.Users;
 
 namespace CqrsApiExample.Application.Common.Interfaces.Persistence;
@@ -27,10 +28,12 @@ namespace CqrsApiExample.Application.Common.Interfaces.Persistence;
 /// </remarks>
 public interface IUserQueries
 {
-    /// <summary>Every user, oldest first (ordered by <c>CreatedAt</c>).</summary>
+    /// <summary>One page of users, oldest first (ordered by <c>CreatedAt</c>, then <c>Id</c>), and the total count.</summary>
+    /// <param name="page">The page number, starting at 1 (already validated).</param>
+    /// <param name="pageSize">Users per page (already validated against the maximum).</param>
     /// <param name="cancellationToken">The request's token.</param>
-    /// <returns>An empty list when there are no users.</returns>
-    Task<List<UserDto>> GetAllAsync(CancellationToken cancellationToken);
+    /// <returns>An empty page when there are no users or the page is past the last one.</returns>
+    Task<PagedResult<UserDto>> GetPageAsync(int page, int pageSize, CancellationToken cancellationToken);
 
     /// <summary>One user by id.</summary>
     /// <param name="id">The user's id.</param>

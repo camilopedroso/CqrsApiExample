@@ -1,5 +1,6 @@
 using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
+using CqrsApiExample.Application.Common.Paging;
 using CqrsApiExample.Application.Users;
 using CqrsApiExample.Infrastructure.Persistence.Instrumentation;
 
@@ -15,7 +16,7 @@ namespace CqrsApiExample.Infrastructure.Persistence.Decorators;
 ///     provider's queries inside. The query handlers never know it is there.
 ///     <para>
 ///         Each call becomes one log line
-///         (<c>Persistence Ado UserQueries.GetAll succeeded in 1.234 ms</c>) and one
+///         (<c>Persistence Ado UserQueries.GetPage succeeded in 1.234 ms</c>) and one
 ///         measurement in the <c>cqrsapi.persistence.operation.duration</c> histogram, tagged with
 ///         provider, operation and outcome (succeeded, failed or cancelled). The decorator only
 ///         measures: exceptions pass through unchanged, and the global exception handler logs them.
@@ -31,7 +32,7 @@ internal sealed class UserQueriesInstrumentationDecorator(IUserQueries inner,
 {
     // The "operation" tag of the logs and the metric: <interface without I>.<method without Async>.
     // Dashboards and queries filter by these values, so treat them as a contract.
-    private const string GetAllOperation = "UserQueries.GetAll";
+    private const string GetPageOperation = "UserQueries.GetPage";
     private const string GetByIdOperation = "UserQueries.GetById";
     private const string GetCredentialsByEmailOperation = "UserQueries.GetCredentialsByEmail";
 
@@ -39,14 +40,14 @@ internal sealed class UserQueriesInstrumentationDecorator(IUserQueries inner,
     public IUserQueries Inner => inner;
 
     /// <summary>
-    ///     Measures the query and the mapping of every row, until the whole list is in memory.
+    ///     Measures the count, the page query and the mapping of its rows, until the page is in memory.
     /// </summary>
-    public Task<List<UserDto>> GetAllAsync(CancellationToken cancellationToken)
+    public Task<PagedResult<UserDto>> GetPageAsync(int page, int pageSize, CancellationToken cancellationToken)
     {
-        return instrumentation.MeasureAsync(GetAllOperation, CallInner);
+        return instrumentation.MeasureAsync(GetPageOperation, CallInner);
 
         // The real call, run (and timed) by MeasureAsync.
-        Task<List<UserDto>> CallInner() => inner.GetAllAsync(cancellationToken);
+        Task<PagedResult<UserDto>> CallInner() => inner.GetPageAsync(page, pageSize, cancellationToken);
     }
 
     /// <summary>

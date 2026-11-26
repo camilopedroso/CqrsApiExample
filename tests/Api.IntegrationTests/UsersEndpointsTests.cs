@@ -2,9 +2,13 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
+using CqrsApiExample.Contracts.Common;
 using CqrsApiExample.Contracts.User;
 using CqrsApiExample.Domain.UserAggregate;
+using CqrsApiExample.Infrastructure.Persistence;
 using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CqrsApiExample.Api.IntegrationTests;
 
@@ -32,16 +36,58 @@ public abstract class UsersEndpointsContract(ApiFactory factory)
 
     [Fact]
     [Trait("Category", "Integration")]
-    public async Task GetUsers_Returns_Seeded_User_As_Json()
+    public async Task GetUsers_Returns_The_First_Page_With_The_Seeded_User_As_Json()
     {
         // Act
         var response = await _client.GetAsync("/api/users");
 
-        // Assert
+        // Assert: the seed user is the oldest, so it opens the first page
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         response.Content.Headers.ContentType?.MediaType.Should().Be("application/json");
-        var users = await response.Content.ReadFromJsonAsync<List<UserResponse>>();
-        users.Should().Contain(user => user.Email == "jane.doe@example.com");
+        var page = await response.Content.ReadFromJsonAsync<PagedResponse<UserResponse>>();
+        page!.Page.Should().Be(1);
+        page.PageSize.Should().Be(20);
+        page.Items.First().Email.Should().Be("jane.doe@example.com");
+        page.TotalCount.Should().BeGreaterThanOrEqualTo(page.Items.Count);
+    }
+
+    [Fact]
+    [Trait("Category", "Integration")]
+    public async Task GetUsers_Pages_Through_Every_User_Once()
+    {
+        // Arrange: at least three users exist (the seed plus two)
+        await _client.PostAsJsonAsync("/api/users", new CreateUserRequest("John", "Doe", NewEmail(), "password123"));
+        await _client.PostAsJsonAsync("/api/users", new CreateUserRequest("John", "Doe", NewEmail(), "password123"));
+
+        // Act: walk every page of one user each
+        var first = await _client.GetFromJsonAsync<PagedResponse<UserResponse>>("/api/users?page=1&pageSize=1");
+        List<Guid> seen = [];
+        for (var page = 1; page <= first!.TotalPages; page++)
+        {
+            var current = await _client.GetFromJsonAsync<PagedResponse<UserResponse>>($"/api/users?page={page}&pageSize=1");
+            seen.AddRange(current!.Items.Select(user => user.Id));
+        }
+
+        // Assert: each user appears exactly once, in creation order
+        first.TotalPages.Should().Be(first.TotalCount);
+        seen.Should().OnlyHaveUniqueItems().And.HaveCountGreaterThanOrEqualTo(first.TotalCount);
+        var pastTheEnd = await _client.GetFromJsonAsync<PagedResponse<UserResponse>>($"/api/users?page={first.TotalPages + 1}&pageSize=1");
+        pastTheEnd!.Items.Should().BeEmpty();
+    }
+
+    [Theory]
+    [Trait("Category", "Integration")]
+    [InlineData("page=0", "Paging.InvalidPage")]
+    [InlineData("pageSize=0", "Paging.InvalidPageSize")]
+    [InlineData("pageSize=101", "Paging.InvalidPageSize")]
+    [InlineData("page=abc", "Request.Invalid")]
+    public async Task GetUsers_Returns_400_For_Paging_Out_Of_Range(string query, string expectedCode)
+    {
+        // Act
+        var response = await _client.GetAsync($"/api/users?{query}");
+
+        // Assert
+        await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest, expectedCode);
     }
 
     [Fact]
@@ -124,8 +170,9 @@ public abstract class UsersEndpointsContract(ApiFactory factory)
                  .ContainSingle(status => status == HttpStatusCode.Created)
                  .And.OnlyContain(status => status == HttpStatusCode.Created || status == HttpStatusCode.Conflict);
 
-        var users = await _client.GetFromJsonAsync<List<UserResponse>>("/api/users");
-        users!.Count(user => user.Email == email).Should().Be(1);
+        using var scope = _factory.Services.CreateScope();
+        var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        (await context.Users.CountAsync(user => user.Email == email)).Should().Be(1);
         await ExactlyOneEmailAsync(email);
     }
 
@@ -244,7 +291,7 @@ public abstract class UsersEndpointsContract(ApiFactory factory)
         var createResponses = document.GetProperty("paths").GetProperty("/api/Users")
                                       .GetProperty("post").GetProperty("responses");
         createResponses.EnumerateObject().Select(response => response.Name)
-                       .Should().BeEquivalentTo(["201", "400", "409", "500"]);
+                       .Should().BeEquivalentTo(["201", "400", "409", "429", "500"]);
     }
 
     private static string NewEmail() => $"user-{Guid.NewGuid():N}@doe.com";
