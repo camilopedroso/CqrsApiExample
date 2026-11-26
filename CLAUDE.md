@@ -96,10 +96,6 @@ Clean Architecture + CQRS, with no mediator library (MediatR was removed in stag
 - The project was refactored in stages: persistence-ignorant domain, own `Result<T>`, unit of work and migrations, CQRS read side, error handling and validation codes, domain events, API, build hygiene, tests, SQL Server + Docker, consistent framework-level errors and SQL retries, the transactional outbox, and the removal of MediatR (own handlers and decorators). The git history was squashed into a single commit before the repository went public, so the stages are no longer in git.
 - In Development, EF's SQL command log (`Microsoft.EntityFrameworkCore.Database.Command`) is at `Warning` in `appsettings.Development.json`, because the outbox polls every 2 s and would flood the log. Set it to `Information` temporarily to see the SQL.
 
-## CI
-
-`.github/workflows/ci.yml`: `build-and-test` (Release build, `dotnet format --verify-no-changes`, all tests; Docker is available on `ubuntu-latest`), `secrets` (gitleaks **container** `ghcr.io/gitleaks/gitleaks`, not `gitleaks-action`, which needs Node 20 and a license for organizations; `.gitleaks.toml` allowlists the committed local-only credentials: add any new one there), `container` (Trivy image scan fails on fixed HIGH/CRITICAL; config scan uploads SARIF; currently one LOW: no `HEALTHCHECK`), `dependency-review` (PRs). `codeql.yml`: C# (manual build) and `actions`, `security-extended`, weekly. **`aquasecurity/trivy-action` is pinned by commit SHA** (v0.36.0; its tags are `v`-prefixed): tags 0.0.1-0.34.2 were compromised in March 2026 (GHSA-69fq-xp46-6x23), so never go back to a tag pin. `dependabot.yml`: nuget (ignores FluentAssertions 8+), github-actions, docker.
-
 ## Tests
 
 One test project per layer, and each references **only** the layer it tests. A test that needs another layer belongs to a different project. Shared settings and packages (xUnit, FluentAssertions, Microsoft.NET.Test.Sdk, coverlet, `using Xunit`) are in `tests/Directory.Build.props`.
