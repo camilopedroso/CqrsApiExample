@@ -218,6 +218,23 @@ Os testes de integração sobem um contêiner SQL Server por assembly de teste. 
 infraestrutura ganham um banco novo por teste; os testes HTTP compartilham o banco da instância da
 API que chamam e usam e-mails únicos.
 
+## Integração contínua
+
+O GitHub Actions (`.github/workflows`) roda em todo push na `main` e em todo pull request:
+
+| Workflow | O que verifica |
+|---|---|
+| `ci.yml` → `build-and-test` | build (warnings e pacotes vulneráveis o derrubam), `dotnet format`, todos os testes (Docker no runner) |
+| `ci.yml` → `secrets` | gitleaks em todo o histórico (`.gitleaks.toml` lista as credenciais de desenvolvimento, só locais) |
+| `ci.yml` → `container` | Trivy: a imagem Docker (HIGH/CRITICAL derrubam o job) e a configuração do Dockerfile/compose |
+| `ci.yml` → `dependency-review` | só em pull requests: nenhuma dependência nova com vulnerabilidade conhecida |
+| `codeql.yml` | análise estática do CodeQL no código C# e nos workflows, também semanal |
+
+O Dependabot (`.github/dependabot.yml`) abre pull requests semanais de atualização dos pacotes NuGet, das
+GitHub Actions e das imagens base do Docker. Nas configurações do repositório, ative também o secret
+scanning com push protection, as atualizações de segurança do Dependabot e o code scanning, para que os
+resultados acima cheguem à aba Security.
+
 ## Benchmarks
 
 EF Core contra ADO.NET em leituras (listar, buscar por id, verificar e-mail) e escritas (insert com

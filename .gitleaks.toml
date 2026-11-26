@@ -1,0 +1,24 @@
+# gitleaks configuration (used by the "secrets" job in .github/workflows/ci.yml).
+#
+# The default rules apply. The values allowed below are development-only credentials that are in
+# the repository on purpose, so a fresh clone runs with no setup: the local SQL Server passwords
+# (compose.yaml, appsettings.Development.json, .vscode/settings.json), the local JWT signing key,
+# the seed user's password and the passwords used by the tests. None of them is valid anywhere but
+# a developer's own container. The default rules don't flag them today; listing them keeps a
+# future rule from failing the build on them. Anything else that looks like a secret still fails.
+title = "CqrsApiExample"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Local-only development and test credentials, committed on purpose"
+regexes = [
+    '''CqrsApi_Dev_2026!''',
+    '''CqrsApi_App_Dev_2026!''',
+    '''local-development-only-signing-key-do-not-use-elsewhere''',
+    '''JaneDoe\.Dev\.2026''',
+    '''Test_App_Passw0rd!''',
+    '''a-test-signing-key-that-is-long-enough''',
+    '''another-key-that-is-also-long-enough!!''',
+]

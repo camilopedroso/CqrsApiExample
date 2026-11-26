@@ -1,0 +1,130 @@
+# Build, style, tests and security scans on every push to main and every pull request.
+#
+#   build-and-test   restore, build (warnings and vulnerable packages fail it: NuGet Audit),
+#                    dotnet format, every test (the runner has Docker, so Testcontainers works)
+#   secrets          gitleaks over the whole history (.gitleaks.toml allows the local-only
+#                    development credentials, which are in the repository on purpose)
+#   container        builds the image and scans it with Trivy (HIGH/CRITICAL fail the job);
+#                    also checks the Dockerfile and compose.yaml for misconfigurations
+#   dependency-review  pull requests only: refuses new dependencies with known vulnerabilities
+#
+# CodeQL (static analysis of the C# code) runs in codeql.yml.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege for the GITHUB_TOKEN: jobs that need more ask for it themselves.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore CqrsApiExample.slnx
+
+      - name: Build
+        run: dotnet build CqrsApiExample.slnx --no-restore --configuration Release
+
+      - name: Check formatting
+        run: dotnet format CqrsApiExample.slnx --no-restore --verify-no-changes
+
+      - name: Test
+        run: >
+          dotnet test CqrsApiExample.slnx --no-build --configuration Release
+          --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # The whole history: a secret removed in a later commit is still leaked.
+          fetch-depth: 0
+
+      # The container rather than gitleaks-action: v2 of the action needs Node 20, which the
+      # hosted runners no longer have, and organization repositories need a license for it.
+      - name: Scan for secrets
+        run: >
+          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:v8.24.0
+          git /repo --config /repo/.gitleaks.toml --redact --verbose
+
+  container:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # Uploads the misconfiguration report to the Security tab (code scanning).
+      security-events: write
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build image
+        run: docker build --tag cqrs-api-example:ci .
+
+      # Pinned to 0.36.0 on purpose: tags 0.0.1-0.34.2 of trivy-action were force-pushed to
+      # credential-stealing code in March 2026 (GHSA-69fq-xp46-6x23). Prefer pinning to the
+      # commit SHA of a release you have checked; Dependabot keeps such pins up to date.
+      - name: Scan image for vulnerabilities
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          image-ref: cqrs-api-example:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+
+      - name: Scan Dockerfile and compose.yaml for misconfigurations
+        uses: aquasecurity/trivy-action@0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+
+      - name: Upload misconfiguration report
+        if: always() && hashFiles('trivy-config.sarif') != ''
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+
+  dependency-review:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: low
