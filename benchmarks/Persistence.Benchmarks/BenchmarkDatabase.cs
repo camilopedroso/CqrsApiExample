@@ -1,4 +1,5 @@
 using CqrsApiExample.Domain.UserAggregate;
+using CqrsApiExample.Infrastructure.Authentication;
 using CqrsApiExample.Infrastructure.Persistence;
 using CqrsApiExample.Infrastructure.Persistence.Interceptors;
 using Microsoft.Data.SqlClient;
@@ -64,7 +65,7 @@ internal sealed class BenchmarkDatabase : IAsyncDisposable
                           sqlServer => sqlServer.EnableRetryOnFailure(maxRetryCount: 3,
                                                                       maxRetryDelay: TimeSpan.FromSeconds(5),
                                                                       errorNumbersToAdd: null))
-            .AddInterceptors(new AuditableEntityInterceptor(TimeProvider.System))
+            .AddInterceptors(new AuditableEntityInterceptor(TimeProvider.System, new AnonymousCurrentUser()))
             .Options;
 
     public async ValueTask DisposeAsync()

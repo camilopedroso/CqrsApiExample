@@ -1,5 +1,6 @@
 using BenchmarkDotNet.Attributes;
 using CqrsApiExample.Domain.UserAggregate;
+using CqrsApiExample.Infrastructure.Authentication;
 using CqrsApiExample.Infrastructure.Persistence;
 using CqrsApiExample.Infrastructure.Persistence.Ado;
 using CqrsApiExample.Infrastructure.Persistence.Repositories;
@@ -48,7 +49,7 @@ public class WriteBenchmarks
     {
         var changes = new AdoChangeSet();
         new AdoUserRepository(_connections, changes).Add(NewUser());
-        await new AdoUnitOfWork(_connections, changes, TimeProvider.System, mode).SaveChangesAsync(CancellationToken.None);
+        await new AdoUnitOfWork(_connections, changes, TimeProvider.System, new AnonymousCurrentUser(), mode).SaveChangesAsync(CancellationToken.None);
     }
 
     private static User NewUser() =>

@@ -33,6 +33,7 @@ domínio entregues por um outbox transacional, dois provedores de persistência 
   `IOwnerOrAdminRequest`) e um decorator aplica a regra a partir do token: membros leem só a si
   mesmos, administradores leem qualquer um. Um membro recebe `403` para o id de outra pessoa, exista
   ele ou não, então a resposta nunca confirma um id.
+  Cada linha registra quem a criou e alterou por último (`CreatedBy`/`ModifiedBy`), a partir do mesmo token.
 - **Erros consistentes.** Todo erro, inclusive os que o framework gera (rota inexistente, JSON
   malformado, token ausente, 405, 415), é um ProblemDetails (RFC 9457) com `errorCodes` e um `traceId`.
 - **Testes por camada.** Testes unitários, testes de integração contra um SQL Server real

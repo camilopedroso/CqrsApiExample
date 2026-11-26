@@ -74,9 +74,12 @@ public static class DependencyInjection
         services.AddAuthorizationBuilder()
                 .SetFallbackPolicy(requireAuthenticatedUser);
 
-        // The Application's view of the caller (AuthorizationDecorator reads it), built from the token.
+        // The Application's view of the caller (AuthorizationDecorator and the audit fields read it),
+        // built from the token. A singleton: it holds no state and reads the ambient HttpContext on each
+        // access, so the singleton audit interceptor can depend on it. Registered before
+        // AddInfrastructure, whose anonymous fallback (TryAdd) then stays out.
         services.AddHttpContextAccessor();
-        services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+        services.AddSingleton<ICurrentUser, HttpContextCurrentUser>();
 
         static void ConfigureJwtBearer(JwtBearerOptions bearer, IOptions<JwtOptions> jwtOptions)
         {

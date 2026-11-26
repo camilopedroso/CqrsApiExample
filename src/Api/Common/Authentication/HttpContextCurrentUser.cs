@@ -15,7 +15,7 @@ namespace CqrsApiExample.Api.Common.Authentication;
 ///         Application's terms.
 ///     </para>
 ///     <para>
-///         Scoped, and read on each access through <see cref="IHttpContextAccessor"/>. With no request
+///         A singleton that reads the ambient request on each access through <see cref="IHttpContextAccessor"/>. With no request
 ///         (the outbox background service runs handlers outside one) the user is anonymous.
 ///     </para>
 /// </remarks>

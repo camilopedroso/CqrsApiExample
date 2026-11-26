@@ -31,6 +31,7 @@ consistent error responses, and tests at every layer.
   `IOwnerOrAdminRequest`) and a decorator enforces it from the caller's token: members read only
   themselves, administrators read anyone. A member gets `403` for someone else's id whether it
   exists or not, so the answer never confirms an id.
+  Every row records who created and last changed it (`CreatedBy`/`ModifiedBy`), from the same token.
 - **Consistent errors.** Every error, including the ones the framework raises (unknown route,
   malformed JSON, missing token, 405, 415), is an RFC 9457 ProblemDetails with `errorCodes` and a `traceId`.
 - **Tests per layer.** Unit tests, integration tests against a real SQL Server (Testcontainers),

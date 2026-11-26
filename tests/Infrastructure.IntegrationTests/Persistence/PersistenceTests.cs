@@ -51,6 +51,35 @@ public sealed class PersistenceTests(SqlServerFixture sqlServer) : IAsyncLifetim
 
     [Fact]
     [Trait("Category", "Persistence")]
+    public async Task SaveChanges_Should_Record_Who_Created_The_User()
+    {
+        // Arrange: one save while signed in, one anonymous (a self-registration)
+        var adminId = Guid.NewGuid();
+        var byAdmin = User.Create("John", "Doe", "john@doe.com", "hashed-password").Value;
+        var anonymous = User.Create("Jane", "Doe", "jane@doe.com", "hashed-password").Value;
+
+        // Act
+        _database.CurrentUser.Id = adminId;
+        await SaveAsync(byAdmin);
+        _database.CurrentUser.Id = null;
+        await SaveAsync(anonymous);
+
+        // Assert
+        await using var readContext = _database.CreateContext();
+        (await readContext.Users.SingleAsync(u => u.Id == byAdmin.Id)).CreatedBy.Should().Be(adminId);
+        (await readContext.Users.SingleAsync(u => u.Id == anonymous.Id)).CreatedBy.Should().BeNull();
+        (await readContext.Users.SingleAsync(u => u.Id == byAdmin.Id)).ModifiedBy.Should().BeNull();
+
+        async Task SaveAsync(User user)
+        {
+            await using var context = _database.CreateContext();
+            new UserRepository(context).Add(user);
+            await _database.CreateUnitOfWork(context).SaveChangesAsync(default);
+        }
+    }
+
+    [Fact]
+    [Trait("Category", "Persistence")]
     public async Task SaveChanges_Should_Throw_UniqueConstraintViolation_When_Email_Is_Duplicated()
     {
         // Arrange

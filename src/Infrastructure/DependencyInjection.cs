@@ -16,6 +16,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -76,6 +77,10 @@ public static class DependencyInjection
         // Both stateless: one instance for the whole app.
         services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
         services.AddSingleton<IAccessTokenIssuer, JwtAccessTokenIssuer>();
+
+        // Who is signed in, for the audit fields. The API registers the real one first (from the
+        // token); without the API (benchmarks, tests) nobody is.
+        services.TryAddSingleton<ICurrentUser, AnonymousCurrentUser>();
     }
 
     /// <summary>
@@ -119,7 +124,8 @@ public static class DependencyInjection
     /// </summary>
     private static void AddEfCore(IServiceCollection services, IConfiguration configs)
     {
-        // Fills CreatedAt/ModifiedAt on SaveChanges. Stateless, so one instance serves every context.
+        // Fills CreatedAt/CreatedBy/ModifiedAt/ModifiedBy on SaveChanges. One instance serves every
+        // context: it reads the clock and ICurrentUser (singletons) at save time.
         services.AddSingleton<AuditableEntityInterceptor>();
 
         // One DbContext per scope (request), shared by the repository, the unit of work and the queries.

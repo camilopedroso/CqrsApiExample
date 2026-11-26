@@ -17,6 +17,12 @@ public abstract class Entity : IEquatable<Entity>
     public DateTime CreatedAt { get; private set; }
     public DateTime? ModifiedAt { get; private set; }
 
+    // Who made the change: the id of the authenticated user, or null when nobody was signed in
+    // (a self-registration, the development seed, a background job). Just an id, with no
+    // foreign key: an audit record must survive whatever happens to the user it names.
+    public Guid? CreatedBy { get; private set; }
+    public Guid? ModifiedBy { get; private set; }
+
     public bool Equals(Entity? other)
     {
         return other is not null

@@ -1,6 +1,7 @@
 using System.Data;
 using System.Text;
 using CqrsApiExample.Application.Common.Exceptions;
+using CqrsApiExample.Application.Common.Interfaces.Authentication;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
 using CqrsApiExample.Domain.Common.Models;
 using CqrsApiExample.Domain.UserAggregate;
@@ -44,6 +45,7 @@ internal sealed class AdoUnitOfWork(
     SqlConnectionFactory connections,
     AdoChangeSet changes,
     TimeProvider timeProvider,
+    ICurrentUser currentUser,
     AdoWriteMode mode = AdoWriteMode.Batched) : IUnitOfWork
 {
     // Exposed so tests can check which mode DI picked (always Batched).
@@ -61,9 +63,10 @@ internal sealed class AdoUnitOfWork(
         // Read once, so the aggregates and their outbox rows share the same timestamp.
         DateTime now = timeProvider.GetUtcNow().UtcDateTime;
 
-        // There is no interceptor here: CreatedAt is set by reflection, the job
-        // AuditableEntityInterceptor does for EF Core.
-        aggregates.ForEach(aggregate => AuditFields.SetCreatedAt(aggregate, now));
+        // There is no interceptor here: CreatedAt/CreatedBy are set by reflection, the job
+        // AuditableEntityInterceptor does for EF Core. Null "by" when nobody is signed in.
+        Guid? userId = currentUser.Id;
+        aggregates.ForEach(aggregate => AuditFields.SetCreated(aggregate, now, userId));
 
         // Same serialization as the EF unit of work: (full type name, JSON).
         // Built once, outside the retry, so every attempt inserts the same message ids.
@@ -133,7 +136,7 @@ internal sealed class AdoUnitOfWork(
     ///     unique violation) aborts the batch and rolls the transaction back.
     ///     Without it a failed INSERT only ends that statement, and the COMMIT
     ///     would store the outbox row of a user that was never saved.
-    ///     SQL Server accepts up to 2100 parameters per command (about 160 users
+    ///     SQL Server accepts up to 2100 parameters per command (about 150 users
     ///     with their events), far more than a unit of work saves today.
     /// </summary>
     private static async Task ExecuteBatchedAsync(List<Statement> statements,
@@ -208,8 +211,8 @@ internal sealed class AdoUnitOfWork(
     private static Statement InsertUser(User user, string p)
     {
         string sql = $"""
-                      INSERT INTO [{Schemas.Accounts}].[Users] ([Id], [Name], [Surname], [Email], [PasswordHash], [Role], [CreatedAt], [ModifiedAt])
-                      VALUES (@{p}Id, @{p}Name, @{p}Surname, @{p}Email, @{p}PasswordHash, @{p}Role, @{p}CreatedAt, NULL);
+                      INSERT INTO [{Schemas.Accounts}].[Users] ([Id], [Name], [Surname], [Email], [PasswordHash], [Role], [CreatedAt], [CreatedBy], [ModifiedAt], [ModifiedBy])
+                      VALUES (@{p}Id, @{p}Name, @{p}Surname, @{p}Email, @{p}PasswordHash, @{p}Role, @{p}CreatedAt, @{p}CreatedBy, NULL, NULL);
                       """;
 
         SqlParameter[] parameters =
@@ -222,7 +225,9 @@ internal sealed class AdoUnitOfWork(
             // By name, like the EF mapping (HasConversion<string>).
             Parameter($"@{p}Role", SqlDbType.NVarChar, user.Role.ToString(), UserConfiguration.RoleMaxLength),
             // DateTime2 explicitly: the default DateTime mapping would round to 3.33 ms.
-            Parameter($"@{p}CreatedAt", SqlDbType.DateTime2, user.CreatedAt)
+            Parameter($"@{p}CreatedAt", SqlDbType.DateTime2, user.CreatedAt),
+            // DBNull, not null: a SqlParameter whose Value is null is not sent at all.
+            Parameter($"@{p}CreatedBy", SqlDbType.UniqueIdentifier, (object?)user.CreatedBy ?? DBNull.Value)
         ];
 
         return new Statement(sql, parameters);

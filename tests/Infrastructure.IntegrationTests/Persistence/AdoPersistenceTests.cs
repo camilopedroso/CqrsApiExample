@@ -65,6 +65,27 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
         saved.Email.Should().Be("john@doe.com");
         saved.CreatedAt.Should().Be(TestDatabase.Start.UtcDateTime);
         saved.ModifiedAt.Should().BeNull();
+        saved.CreatedBy.Should().BeNull("nobody was signed in");
+    }
+
+    [Fact]
+    [Trait("Category", "Persistence")]
+    public async Task SaveChanges_Should_Record_Who_Created_The_User_Like_EF_Core()
+    {
+        // Arrange
+        var adminId = Guid.NewGuid();
+        _database.CurrentUser.Id = adminId;
+        var user = User.Create("John", "Doe", "john@doe.com", "hashed-password").Value;
+
+        // Act
+        await AddUserAsync(user);
+
+        // Assert: read back through EF, so both providers agree on the column
+        user.CreatedBy.Should().Be(adminId);
+        await using var readContext = _database.CreateContext();
+        var saved = await readContext.Users.SingleAsync(u => u.Id == user.Id);
+        saved.CreatedBy.Should().Be(adminId);
+        saved.ModifiedBy.Should().BeNull();
     }
 
     [Fact]
