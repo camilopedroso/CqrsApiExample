@@ -1,4 +1,5 @@
 using CqrsApiExample.Application.Common.Exceptions;
+using CqrsApiExample.Application.Common.Interfaces.Authentication;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
 using CqrsApiExample.Application.Users.Commands.CreateUser;
 using CqrsApiExample.Domain.Common.DomainErrors;
@@ -13,16 +14,19 @@ public class CreateUserCommandTests
 {
     private readonly Mock<IUserRepository> _userRepository;
     private readonly Mock<IUnitOfWork> _unitOfWork;
+    private readonly Mock<IPasswordHasher> _passwordHasher = new();
     private readonly CreateUserCommandHandler _handler;
     private readonly CreateUserCommandValidator _validator;
-    private readonly CreateUserCommand _command = new("John", "Doe", "john@doe.com");
+    private readonly CreateUserCommand _command = new("John", "Doe", "john@doe.com", "password123");
 
     public CreateUserCommandTests()
     {
         _userRepository = new Mock<IUserRepository>();
         _unitOfWork = new Mock<IUnitOfWork>();
         _handler = new CreateUserCommandHandler(_userRepository.Object,
-                                                _unitOfWork.Object);
+                                                _unitOfWork.Object,
+                                                _passwordHasher.Object);
+        _passwordHasher.Setup(x => x.Hash(It.IsAny<string>())).Returns("hashed-password");
         _validator = new();
     }
 
@@ -107,7 +111,7 @@ public class CreateUserCommandTests
     public async Task Handle_Should_Return_Domain_Errors_When_Input_Breaks_Invariants()
     {
         // Act
-        var result = await _handler.Handle(new CreateUserCommand(" ", "Doe", "john@doe.com"), default);
+        var result = await _handler.Handle(new CreateUserCommand(" ", "Doe", "john@doe.com", "password123"), default);
 
         // Assert
         result.IsError.Should().BeTrue();
@@ -132,7 +136,7 @@ public class CreateUserCommandTests
                                                                                    string expectedField)
     {
         // Act
-        var result = _validator.Validate(new CreateUserCommand(name!, surname!, email!));
+        var result = _validator.Validate(new CreateUserCommand(name!, surname!, email!, "password123"));
 
         // Assert
         result.IsValid.Should().BeFalse();
@@ -148,10 +152,65 @@ public class CreateUserCommandTests
         // Act
         var result = _validator.Validate(new CreateUserCommand(new string('a', User.NameMaxLength + 1),
                                                                "Doe",
-                                                               "john@doe.com"));
+                                                               "john@doe.com", "password123"));
 
         // Assert
         result.Errors.Should().ContainSingle().Which.ErrorCode.Should().Be(Errors.Users.InvalidName.Code);
+    }
+
+    [Fact]
+    [Trait("Category", "Command")]
+    public async Task Handle_Should_Store_Only_The_Password_Hash()
+    {
+        // Arrange
+        _userRepository.Setup(x => x.ExistsByEmailAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                       .ReturnsAsync(false);
+
+        // Act
+        await _handler.Handle(_command, default);
+
+        // Assert: the hasher got the typed password, and the user carries what it returned
+        _passwordHasher.Verify(x => x.Hash("password123"), Times.Once);
+        _userRepository.Verify(x => x.Add(It.Is<User>(u => u.PasswordHash == "hashed-password")), Times.Once);
+    }
+
+    [Theory]
+    [Trait("Category", "Validator")]
+    [InlineData("")]
+    [InlineData(null)]
+    [InlineData("short")]
+    public void CreateUserCommandValidator_Should_Reject_Invalid_Password(string? password)
+    {
+        // Act
+        var result = _validator.Validate(_command with { Password = password! });
+
+        // Assert
+        var error = result.Errors.Should().ContainSingle().Subject;
+        error.ErrorCode.Should().Be(Errors.Users.InvalidPassword.Code);
+        error.PropertyName.Should().Be("Password");
+        error.ErrorMessage.Should().Be(Errors.Users.InvalidPassword.Description);
+    }
+
+    [Fact]
+    [Trait("Category", "Validator")]
+    public void CreateUserCommandValidator_Should_Reject_Password_Longer_Than_The_Maximum()
+    {
+        // Act
+        var result = _validator.Validate(_command with { Password = new string('a', User.PasswordMaxLength + 1) });
+
+        // Assert
+        result.Errors.Should().ContainSingle().Which.ErrorCode.Should().Be(Errors.Users.InvalidPassword.Code);
+    }
+
+    [Fact]
+    [Trait("Category", "Command")]
+    public void ToString_Should_Not_Reveal_The_Password()
+    {
+        // Act
+        var text = _command.ToString();
+
+        // Assert
+        text.Should().NotContain("password123").And.Contain("Password = ***");
     }
 
     [Fact]

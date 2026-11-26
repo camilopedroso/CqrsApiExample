@@ -1,3 +1,4 @@
+using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Common.Exceptions;
 using CqrsApiExample.Application.Users;
 using CqrsApiExample.Domain.UserAggregate;
@@ -48,7 +49,7 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
     public async Task SaveChanges_Should_Persist_User_And_Fill_CreatedAt()
     {
         // Arrange
-        var user = User.Create("John", "Doe", "john@doe.com").Value;
+        var user = User.Create("John", "Doe", "john@doe.com", "hashed-password").Value;
         var ado = _database.CreateAdoScope(_mode);
         ado.Repository.Add(user);
 
@@ -84,8 +85,8 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
     public async Task SaveChanges_Should_Persist_Several_Users_And_Their_Events_Together()
     {
         // Arrange: two aggregates in one unit of work, so parameter names must not collide
-        var john = User.Create("John", "Doe", "john@doe.com").Value;
-        var jane = User.Create("Jane", "Doe", "jane@doe.com").Value;
+        var john = User.Create("John", "Doe", "john@doe.com", "hashed-password").Value;
+        var jane = User.Create("Jane", "Doe", "jane@doe.com", "hashed-password").Value;
         var ado = _database.CreateAdoScope(_mode);
         ado.Repository.Add(john);
         ado.Repository.Add(jane);
@@ -110,9 +111,9 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
     public async Task SaveChanges_Should_Throw_UniqueConstraintViolation_When_Email_Is_Duplicated()
     {
         // Arrange
-        await AddUserAsync(User.Create("John", "Doe", "john@doe.com").Value);
+        await AddUserAsync(User.Create("John", "Doe", "john@doe.com", "hashed-password").Value);
         var ado = _database.CreateAdoScope(_mode);
-        ado.Repository.Add(User.Create("Johnny", "Doe", "john@doe.com").Value);
+        ado.Repository.Add(User.Create("Johnny", "Doe", "john@doe.com", "hashed-password").Value);
 
         // Act
         var act = () => ado.UnitOfWork.SaveChangesAsync(default);
@@ -126,7 +127,7 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
     public async Task ExistsByEmailAsync_Should_Find_Only_Saved_Emails()
     {
         // Arrange
-        await AddUserAsync(User.Create("John", "Doe", "john@doe.com").Value);
+        await AddUserAsync(User.Create("John", "Doe", "john@doe.com", "hashed-password").Value);
         var repository = _database.CreateAdoScope(_mode).Repository;
 
         // Act & Assert
@@ -139,8 +140,8 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
     public async Task UserQueries_Should_Return_Read_Models_Ordered_By_Creation()
     {
         // Arrange
-        var first = User.Create("Zoe", "Doe", "zoe@doe.com").Value;
-        var second = User.Create("Adam", "Doe", "adam@doe.com").Value;
+        var first = User.Create("Zoe", "Doe", "zoe@doe.com", "hashed-password").Value;
+        var second = User.Create("Adam", "Doe", "adam@doe.com", "hashed-password").Value;
         await AddUserAsync(first);
         _database.Clock.Advance(TimeSpan.FromMinutes(1));
         await AddUserAsync(second);
@@ -162,9 +163,9 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
     public async Task UserQueries_Should_Return_The_Same_As_The_EF_Core_Queries()
     {
         // Arrange
-        await AddUserAsync(User.Create("Zoe", "Doe", "zoe@doe.com").Value);
+        await AddUserAsync(User.Create("Zoe", "Doe", "zoe@doe.com", "hashed-password").Value);
         _database.Clock.Advance(TimeSpan.FromMinutes(1));
-        await AddUserAsync(User.Create("Adam", "Doe", "adam@doe.com").Value);
+        await AddUserAsync(User.Create("Adam", "Doe", "adam@doe.com", "hashed-password").Value);
         await using var context = _database.CreateContext();
 
         // Act
@@ -176,11 +177,31 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
     }
 
     [Fact]
+    [Trait("Category", "Persistence")]
+    public async Task GetCredentialsByEmailAsync_Should_Return_The_Stored_Hash_Like_EF_Core()
+    {
+        // Arrange: inserted by the ADO.NET unit of work, so the hash column is written by hand-written SQL too
+        var user = User.Create("John", "Doe", "john@doe.com", "stored-hash").Value;
+        await AddUserAsync(user);
+        await using var context = _database.CreateContext();
+
+        // Act
+        var fromAdo = await _database.CreateAdoScope(_mode).Queries.GetCredentialsByEmailAsync("john@doe.com", default);
+        var fromEfCore = await new UserQueries(context).GetCredentialsByEmailAsync("john@doe.com", default);
+        var missing = await _database.CreateAdoScope(_mode).Queries.GetCredentialsByEmailAsync("jane@doe.com", default);
+
+        // Assert
+        fromAdo.Should().Be(new UserCredentialsDto(user.Id, "stored-hash"));
+        fromEfCore.Should().Be(fromAdo);
+        missing.Should().BeNull();
+    }
+
+    [Fact]
     [Trait("Category", "Outbox")]
     public async Task SaveChanges_Should_Store_Domain_Events_In_The_Outbox_With_The_Changes()
     {
         // Arrange
-        var user = User.Create("John", "Doe", "john@doe.com").Value;
+        var user = User.Create("John", "Doe", "john@doe.com", "hashed-password").Value;
 
         // Act
         await AddUserAsync(user);
@@ -204,8 +225,8 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
     public async Task SaveChanges_Should_Not_Store_Domain_Events_When_The_Save_Fails()
     {
         // Arrange
-        await AddUserAsync(User.Create("John", "Doe", "john@doe.com").Value);
-        var rejected = User.Create("Johnny", "Doe", "john@doe.com").Value;
+        await AddUserAsync(User.Create("John", "Doe", "john@doe.com", "hashed-password").Value);
+        var rejected = User.Create("Johnny", "Doe", "john@doe.com", "hashed-password").Value;
         var ado = _database.CreateAdoScope(_mode);
         ado.Repository.Add(rejected);
 

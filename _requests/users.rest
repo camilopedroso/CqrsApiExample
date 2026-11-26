@@ -24,7 +24,7 @@
 
 ###
 # =============================================================================
-#  1. Discovery
+#  1. Discovery and login
 # =============================================================================
 
 ### 1.1 OpenAPI document: every endpoint with its possible responses
@@ -33,6 +33,19 @@
 #   Swagger UI (open in a browser): http://localhost:5235/swagger
 #   Both exist only in the Development environment.
 GET {{baseUrl}}/openapi/v1.json
+
+### 1.2 Log in as the seed user (Development only; password in DbInitializer.SeedUserPassword)
+#   200 { accessToken, tokenType: "Bearer", expiresIn: 1800 }, with Cache-Control: no-store.
+#   Every GET below sends this token (needs: login). Without it they answer
+#   401 Request.Unauthorized (see 7.4). Registering (3.1) and logging in are anonymous.
+# @name login
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "jane.doe@example.com",
+    "password": "JaneDoe.Dev.2026"
+}
 
 
 ###
@@ -45,10 +58,12 @@ GET {{baseUrl}}/openapi/v1.json
 #   startup in Development.
 # @name listUsers
 GET {{api}}/users
+Authorization: Bearer {{login.response.body.accessToken}}
 
 ### 2.2 Get one user by id (needs: listUsers)
 #   200 with the same fields as in the list.
 GET {{api}}/users/{{listUsers.response.body.$[0].id}}
+Authorization: Bearer {{login.response.body.accessToken}}
 
 
 ###
@@ -73,12 +88,14 @@ Content-Type: application/json
 {
     "name": "  Ada  ",
     "surname": "Lovelace",
-    "email": "  Ada.{{$guid}}@Example.COM  "
+    "email": "  Ada.{{$guid}}@Example.COM  ",
+    "password": "correct horse battery staple"
 }
 
 ### 3.2 Follow the Location header of the new user (needs: createUser)
 #   200, the user as stored.
 GET {{createUser.response.headers.Location}}
+Authorization: Bearer {{login.response.body.accessToken}}
 
 
 ###
@@ -97,11 +114,34 @@ Content-Type: application/json
 {
     "name": "Ada",
     "surname": "Again",
-    "email": "{{createUser.request.body.$.email}}"
+    "email": "{{createUser.request.body.$.email}}",
+    "password": "correct horse battery staple"
 }
 
-### 4.2 User not found: 404 User.NotFound
+### 4.2 Wrong password: 401 Auth.InvalidCredentials (needs: createUser)
+#   An unknown email gets exactly the same answer (try any other email), so
+#   the API never tells which emails have an account.
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "{{createUser.request.body.$.email}}",
+    "password": "not the password"
+}
+
+### 4.3 Log in as the new user (needs: createUser)
+#   The email is matched after normalization, like the duplicate check in 4.1.
+POST {{api}}/auth/login
+Content-Type: application/json
+
+{
+    "email": "{{createUser.request.body.$.email}}",
+    "password": "correct horse battery staple"
+}
+
+### 4.4 User not found: 404 User.NotFound
 GET {{api}}/users/bc0b9fa8-cfd3-430e-adf8-7afbed42a5a1
+Authorization: Bearer {{login.response.body.accessToken}}
 
 
 ###
@@ -123,7 +163,8 @@ Content-Type: application/json
 {
     "name": "",
     "surname": "Lovelace",
-    "email": "not-an-email"
+    "email": "not-an-email",
+    "password": "correct horse battery staple"
 }
 
 ### 5.2 Every field invalid
@@ -134,7 +175,8 @@ Content-Type: application/json
 {
     "name": "",
     "surname": "",
-    "email": ""
+    "email": "",
+    "password": "correct horse battery staple"
 }
 
 ### 5.3 Whitespace only counts as empty
@@ -145,7 +187,8 @@ Content-Type: application/json
 {
     "name": "   ",
     "surname": "Lovelace",
-    "email": "ada.{{$guid}}@example.com"
+    "email": "ada.{{$guid}}@example.com",
+    "password": "correct horse battery staple"
 }
 
 ### 5.4 Too long: the limits come from the domain (User.NameMaxLength = 100)
@@ -157,7 +200,8 @@ Content-Type: application/json
 {
     "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     "surname": "Lovelace",
-    "email": "ada.{{$guid}}@example.com"
+    "email": "ada.{{$guid}}@example.com",
+    "password": "correct horse battery staple"
 }
 
 ### 5.5 Missing field: same error as an empty one
@@ -167,7 +211,8 @@ Content-Type: application/json
 
 {
     "name": "Ada",
-    "email": "ada.{{$guid}}@example.com"
+    "email": "ada.{{$guid}}@example.com",
+    "password": "correct horse battery staple"
 }
 
 ### 5.6 Explicit null: same error as an empty one
@@ -178,11 +223,13 @@ Content-Type: application/json
 {
     "name": "Ada",
     "surname": null,
-    "email": "ada.{{$guid}}@example.com"
+    "email": "ada.{{$guid}}@example.com",
+    "password": "correct horse battery staple"
 }
 
 ### 5.7 Empty id: 400 User.InvalidId (a GUID, but not a valid user id)
 GET {{api}}/users/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{login.response.body.accessToken}}
 
 
 ###
@@ -209,7 +256,8 @@ Content-Type: application/json
 {
     "name": 123,
     "surname": "Lovelace",
-    "email": "ada.{{$guid}}@example.com"
+    "email": "ada.{{$guid}}@example.com",
+    "password": "correct horse battery staple"
 }
 
 ### 6.3 Empty body: 400 Request.Invalid ("A non-empty request body is required.")
@@ -226,9 +274,10 @@ Content-Type: application/json
 
 ### 7.1 Id that is not a GUID: 404 Request.NotFound
 #   The route only matches GUIDs ({id:guid}), so no endpoint is found.
-#   Compare with 4.2: Request.NotFound = no such route,
+#   Compare with 4.4: Request.NotFound = no such route,
 #                     User.NotFound    = the route exists, the user doesn't.
 GET {{api}}/users/not-a-guid
+Authorization: Bearer {{login.response.body.accessToken}}
 
 ### 7.2 Wrong Content-Type: 415 Request.UnsupportedMediaType
 POST {{api}}/users
@@ -238,7 +287,19 @@ Ada Lovelace
 
 ### 7.3 Method not supported: 405 Request.MethodNotAllowed
 #   The "Allow" response header lists what is supported (GET).
+#   With a token: without one, every endpoint that isn't anonymous (including an
+#   unknown route or method) answers 401 first, so nothing is revealed to anonymous callers.
 DELETE {{api}}/users/{{listUsers.response.body.$[0].id}}
+Authorization: Bearer {{login.response.body.accessToken}}
+
+### 7.4 No token: 401 Request.Unauthorized
+#   The WWW-Authenticate header says "Bearer". Same answer for an expired or
+#   tampered token, with error="invalid_token" in that header.
+GET {{api}}/users
+
+### 7.5 Invalid token: 401 Request.Unauthorized
+GET {{api}}/users
+Authorization: Bearer not.a.token
 
 
 ###

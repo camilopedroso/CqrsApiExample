@@ -30,5 +30,10 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
                .IsRequired();
 
         builder.HasIndex(u => u.Email).IsUnique();
+
+        // The hasher's self-describing string, never the password itself.
+        builder.Property(u => u.PasswordHash)
+               .HasMaxLength(User.PasswordHashMaxLength)
+               .IsRequired();
     }
 }

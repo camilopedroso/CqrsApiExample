@@ -24,8 +24,11 @@ consistent error responses, and tests at every layer.
 - **Two persistence providers, one flag.** `Persistence:Provider` picks EF Core or hand-written
   ADO.NET behind the same interfaces, with the same outbox guarantee. Both are instrumented with
   logs and a metrics histogram, and compared with BenchmarkDotNet.
+- **JWT authentication.** Registration stores a PBKDF2 password hash; `POST /api/auth/login`
+  issues a short-lived HS256 access token. Every endpoint requires a token unless it says
+  `[AllowAnonymous]` (a fallback policy), and an architecture test makes each action declare it.
 - **Consistent errors.** Every error, including the ones the framework raises (unknown route,
-  malformed JSON, 405, 415), is an RFC 9457 ProblemDetails with `errorCodes` and a `traceId`.
+  malformed JSON, missing token, 405, 415), is an RFC 9457 ProblemDetails with `errorCodes` and a `traceId`.
 - **Tests per layer.** Unit tests, integration tests against a real SQL Server (Testcontainers),
   HTTP tests with `WebApplicationFactory`, and architecture tests that enforce the layer rules.
 
@@ -55,7 +58,7 @@ dotnet run --project src/Api
 Then open <http://localhost:5235/swagger>. The OpenAPI document is at `/openapi/v1.json`.
 
 In the Development environment the API applies the EF Core migrations and seeds one user
-(Jane Doe). SQL Server listens on `127.0.0.1:14330` (database `CqrsApi`) with a local-only SA
+(`jane.doe@example.com`, password `JaneDoe.Dev.2026`, local only). SQL Server listens on `127.0.0.1:14330` (database `CqrsApi`) with a local-only SA
 password; set `MSSQL_SA_PASSWORD` to use another one. Outside Development nothing is applied
 automatically: run the migrations as a deployment step and provide `ConnectionStrings__Database`.
 
@@ -65,18 +68,41 @@ error cases included.
 
 ## API
 
-| Method | Route | Success | Errors |
-|---|---|---|---|
-| `GET` | `/api/users` | `200` list ordered by creation date | |
-| `GET` | `/api/users/{id}` | `200` the user | `400 User.InvalidId`, `404 User.NotFound` |
-| `POST` | `/api/users` | `201` with `Location` | `400` validation, `409 User.DuplicateEmail` |
+| Method | Route | Token | Success | Errors |
+|---|---|---|---|---|
+| `POST` | `/api/users` | no | `201` with `Location` | `400` validation, `409 User.DuplicateEmail` |
+| `POST` | `/api/auth/login` | no | `200` access token | `400` validation, `401 Auth.InvalidCredentials` |
+| `GET` | `/api/users` | yes | `200` list ordered by creation date | `401 Request.Unauthorized` |
+| `GET` | `/api/users/{id}` | yes | `200` the user | `400 User.InvalidId`, `401`, `404 User.NotFound` |
 
 ```http
 POST /api/users
 Content-Type: application/json
 
-{ "name": "John", "surname": "Doe", "email": "john@doe.com" }
+{ "name": "John", "surname": "Doe", "email": "john@doe.com", "password": "at least 8 characters" }
 ```
+
+Then log in and send the token on the protected routes:
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{ "email": "john@doe.com", "password": "at least 8 characters" }
+```
+
+```json
+{ "accessToken": "eyJhbGciOi...", "tokenType": "Bearer", "expiresIn": 1800 }
+```
+
+```http
+GET /api/users
+Authorization: Bearer eyJhbGciOi...
+```
+
+In Swagger UI, use the **Authorize** button. A wrong password and an unknown email get the same
+`401 Auth.InvalidCredentials`, so the API never reveals which emails have an account. A missing,
+expired or badly signed token gets `401 Request.Unauthorized` with a `WWW-Authenticate` header.
 
 Errors use `application/problem+json`. Clients should branch on `errorCodes`, not on the messages:
 
@@ -126,6 +152,12 @@ More detail:
 |---|---|---|
 | `ConnectionStrings:Database` | SQL Server connection string | none outside Development |
 | `Persistence:Provider` | `Ado` or `EfCore` | `Ado` in `appsettings.json` |
+| `Jwt:SigningKey` | at least 32 bytes; signs and validates tokens | none outside Development |
+| `Jwt:Issuer`, `Jwt:Audience` | token issuer and audience | `CqrsApiExample`, `CqrsApiExample.Api` |
+| `Jwt:AccessTokenLifetime` | `hh:mm:ss` | `00:30:00` |
+
+The signing key is like the connection string: not in `appsettings.json`, so every environment
+must provide its own (`Jwt__SigningKey`), and the API refuses to start without a valid one.
 
 Environment variables use `__` as the separator (`Persistence__Provider=EfCore`). With Compose:
 `PERSISTENCE_PROVIDER=EfCore docker compose up`.

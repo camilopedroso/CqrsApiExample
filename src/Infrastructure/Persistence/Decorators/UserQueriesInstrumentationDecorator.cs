@@ -1,3 +1,4 @@
+using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
 using CqrsApiExample.Application.Users;
 using CqrsApiExample.Infrastructure.Persistence.Instrumentation;
@@ -32,6 +33,7 @@ internal sealed class UserQueriesInstrumentationDecorator(IUserQueries inner,
     // Dashboards and queries filter by these values, so treat them as a contract.
     private const string GetAllOperation = "UserQueries.GetAll";
     private const string GetByIdOperation = "UserQueries.GetById";
+    private const string GetCredentialsByEmailOperation = "UserQueries.GetCredentialsByEmail";
 
     /// <summary>The provider's implementation being timed (exposed for the DI tests).</summary>
     public IUserQueries Inner => inner;
@@ -57,5 +59,17 @@ internal sealed class UserQueriesInstrumentationDecorator(IUserQueries inner,
 
         // The real call, run (and timed) by MeasureAsync.
         Task<UserDto?> CallInner() => inner.GetByIdAsync(id, cancellationToken);
+    }
+
+    /// <summary>
+    ///     Measures the login's lookup by email (the unique index). An unknown email is still
+    ///     <c>succeeded</c>; the handler turns it into Auth.InvalidCredentials.
+    /// </summary>
+    public Task<UserCredentialsDto?> GetCredentialsByEmailAsync(string email, CancellationToken cancellationToken)
+    {
+        return instrumentation.MeasureAsync(GetCredentialsByEmailOperation, CallInner);
+
+        // The real call, run (and timed) by MeasureAsync.
+        Task<UserCredentialsDto?> CallInner() => inner.GetCredentialsByEmailAsync(email, cancellationToken);
     }
 }

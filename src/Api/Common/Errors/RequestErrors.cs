@@ -4,7 +4,8 @@ namespace CqrsApiExample.Api.Common.Errors;
 
 /// <summary>
 ///     Errors about the HTTP request itself, raised before any application
-///     code runs (unbindable body, unknown route, wrong method or media type).
+///     code runs (unbindable body, missing or invalid token, unknown route,
+///     wrong method or media type).
 /// </summary>
 public static class RequestErrors
 {
@@ -13,6 +14,14 @@ public static class RequestErrors
 
     public static Error NotFound =>
         Error.NotFound(code: "Request.NotFound", description: "No endpoint matches the request path.");
+
+    // Raised by the authentication middleware: no token, or one that is expired, badly signed
+    // or for another issuer/audience. The WWW-Authenticate header says which.
+    public static Error Unauthorized =>
+        Error.Unauthorized(code: "Request.Unauthorized", description: "A valid access token is required.");
+
+    public static Error Forbidden =>
+        Error.Forbidden(code: "Request.Forbidden", description: "The access token does not allow this request.");
 
     public static Error MethodNotAllowed =>
         Error.Failure(code: "Request.MethodNotAllowed", description: "The HTTP method is not supported by this endpoint.");
@@ -26,6 +35,8 @@ public static class RequestErrors
     /// </summary>
     public static Error? ForStatusCode(int statusCode) => statusCode switch
     {
+        StatusCodes.Status401Unauthorized => Unauthorized,
+        StatusCodes.Status403Forbidden => Forbidden,
         StatusCodes.Status404NotFound => NotFound,
         StatusCodes.Status405MethodNotAllowed => MethodNotAllowed,
         StatusCodes.Status415UnsupportedMediaType => UnsupportedMediaType,

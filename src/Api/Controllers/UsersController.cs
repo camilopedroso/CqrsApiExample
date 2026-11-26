@@ -6,6 +6,7 @@ using CqrsApiExample.Application.Users.Queries.GetAllUsers;
 using CqrsApiExample.Application.Users.Queries.GetUserById;
 using CqrsApiExample.Contracts.User;
 using CqrsApiExample.Domain.Common.Results;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CqrsApiExample.Api.Controllers;
@@ -48,13 +49,17 @@ namespace CqrsApiExample.Api.Controllers;
 ///     </para>
 /// </remarks>
 [Route("api/[controller]")]
+// Reading users needs a token; registering doesn't (CreateUser opts out with [AllowAnonymous]).
+// The fallback policy would require it anyway: the attribute says so where the reader looks.
+[Authorize]
 // Any action can fail unexpectedly; GlobalExceptionHandler answers with this 500.
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
 public class UsersController : ApiControllerBase
 {
-    /// <summary>GET /api/users: every user.</summary>
+    /// <summary>GET /api/users: every user. 401 without a valid token.</summary>
     [HttpGet]
     [ProducesResponseType<IEnumerable<UserResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
     public async Task<IActionResult> GetUsers(
         // Resolved from DI for this request, not read from the HTTP request (see the class remarks).
         [FromServices] IRequestHandler<GetAllUsersQuery, Result<List<UserDto>>> handler,
@@ -82,6 +87,7 @@ public class UsersController : ApiControllerBase
     [HttpGet("{id:guid}")]
     [ProducesResponseType<UserResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     public async Task<IActionResult> GetUser(
         Guid id,
@@ -103,10 +109,12 @@ public class UsersController : ApiControllerBase
     }
 
     /// <summary>
-    ///     POST /api/users: creates a user. 201 with a Location header pointing to GetUser,
+    ///     POST /api/users: registers a user. 201 with a Location header pointing to GetUser,
     ///     400 for invalid input, 409 User.DuplicateEmail when the email is already used.
+    ///     Anonymous: this is how a new user gets an account to log in with.
     /// </summary>
     [HttpPost]
+    [AllowAnonymous]
     [ProducesResponseType<UserResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict, "application/problem+json")]
@@ -117,7 +125,7 @@ public class UsersController : ApiControllerBase
     {
         // The contract (Contracts project) is mapped to the command (Application), so the
         // public API and the use case can change independently.
-        CreateUserCommand command = new(request.Name, request.Surname, request.Email);
+        CreateUserCommand command = new(request.Name, request.Surname, request.Email, request.Password);
 
         Result<UserDto> result = await handler.Handle(command, cancellationToken);
 

@@ -12,7 +12,7 @@ namespace CqrsApiExample.Application.UnitTests.Decorators;
 public class LoggingDecoratorTests
 {
     private readonly FakeLogger<LoggingDecorator<CreateUserCommand, Result<UserDto>>> _logger = new();
-    private readonly CreateUserCommand _command = new("John", "Doe", "john@doe.com");
+    private readonly CreateUserCommand _command = new("John", "Doe", "john@doe.com", "password123");
 
     [Fact]
     [Trait("Category", "Decorator")]

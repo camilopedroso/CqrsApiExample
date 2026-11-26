@@ -26,7 +26,8 @@ public sealed class AdoUsersEndpointsTests(ApiFixture api) : UsersEndpointsContr
 public abstract class UsersEndpointsContract(ApiFactory factory)
 {
     private readonly ApiFactory _factory = factory;
-    private readonly HttpClient _client = factory.CreateClient();
+    // Sends a valid token: reading users requires one. Registering (POST) doesn't, so it works either way.
+    private readonly HttpClient _client = factory.CreateAuthenticatedClient();
 
     [Fact]
     [Trait("Category", "Integration")]
@@ -51,7 +52,7 @@ public abstract class UsersEndpointsContract(ApiFactory factory)
 
         // Act
         var response = await _client.PostAsJsonAsync("/api/users",
-                                                      new CreateUserRequest(" John ", "Doe", email.ToUpperInvariant()));
+                                                      new CreateUserRequest(" John ", "Doe", email.ToUpperInvariant(), "password123"));
 
         // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -78,7 +79,7 @@ public abstract class UsersEndpointsContract(ApiFactory factory)
         _factory.Emails.FailFor(email, times: 2);
 
         // Act
-        var response = await _client.PostAsJsonAsync("/api/users", new CreateUserRequest("John", "Doe", email));
+        var response = await _client.PostAsJsonAsync("/api/users", new CreateUserRequest("John", "Doe", email, "password123"));
 
         // Assert: the user is created right away; the email arrives after the retries
         response.StatusCode.Should().Be(HttpStatusCode.Created);
@@ -93,12 +94,12 @@ public abstract class UsersEndpointsContract(ApiFactory factory)
     {
         // Arrange
         var email = NewEmail();
-        (await _client.PostAsJsonAsync("/api/users", new CreateUserRequest("John", "Doe", email)))
+        (await _client.PostAsJsonAsync("/api/users", new CreateUserRequest("John", "Doe", email, "password123")))
             .StatusCode.Should().Be(HttpStatusCode.Created);
 
         // Act
         var response = await _client.PostAsJsonAsync("/api/users",
-                                                      new CreateUserRequest("Johnny", "Doe", email.ToUpperInvariant()));
+                                                      new CreateUserRequest("Johnny", "Doe", email.ToUpperInvariant(), "password123"));
 
         // Assert
         var problem = await response.ShouldBeProblemAsync(HttpStatusCode.Conflict, "User.DuplicateEmail");
@@ -115,7 +116,7 @@ public abstract class UsersEndpointsContract(ApiFactory factory)
 
         // Act
         var responses = await Task.WhenAll(Enumerable.Range(1, 10).Select(i =>
-            _client.PostAsJsonAsync("/api/users", new CreateUserRequest($"Racer{i}", "Doe", email))));
+            _client.PostAsJsonAsync("/api/users", new CreateUserRequest($"Racer{i}", "Doe", email, "password123"))));
 
         // Assert: the unique index turns the losers into 409s, never 500s
         responses.Select(response => response.StatusCode).Should()
@@ -132,7 +133,7 @@ public abstract class UsersEndpointsContract(ApiFactory factory)
     public async Task CreateUser_Returns_400_Grouped_By_Field_With_Error_Codes()
     {
         // Act
-        var response = await _client.PostAsJsonAsync("/api/users", new CreateUserRequest("", "Doe", "not-an-email"));
+        var response = await _client.PostAsJsonAsync("/api/users", new CreateUserRequest("", "Doe", "not-an-email", "password123"));
 
         // Assert
         var problem = await response.ShouldBeProblemAsync(HttpStatusCode.BadRequest,
@@ -144,8 +145,8 @@ public abstract class UsersEndpointsContract(ApiFactory factory)
 
     [Theory]
     [Trait("Category", "Integration")]
-    [InlineData("""{ "name": "John", "email": "missing@doe.com" }""", "User.InvalidSurname")]
-    [InlineData("""{ "name": "John", "surname": null, "email": "null@doe.com" }""", "User.InvalidSurname")]
+    [InlineData("""{ "name": "John", "email": "missing@doe.com", "password": "password123" }""", "User.InvalidSurname")]
+    [InlineData("""{ "name": "John", "surname": null, "email": "null@doe.com", "password": "password123" }""", "User.InvalidSurname")]
     [InlineData("""{ "name": """, "Request.Invalid")]
     public async Task CreateUser_Returns_400_For_Missing_Null_Or_Unreadable_Input(string body, string expectedCode)
     {

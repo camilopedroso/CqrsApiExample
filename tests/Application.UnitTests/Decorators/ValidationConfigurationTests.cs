@@ -16,7 +16,7 @@ public class ValidationConfigurationTests
         var validator = provider.GetRequiredService<IValidator<CreateUserCommand>>();
 
         // Act
-        var result = validator.Validate(new CreateUserCommand("", "Doe", "john@doe.com"));
+        var result = validator.Validate(new CreateUserCommand("", "Doe", "john@doe.com", "password123"));
 
         // Assert
         result.Errors.Should().ContainSingle().Which.ErrorMessage.Should().Be("'Name' must not be empty.");

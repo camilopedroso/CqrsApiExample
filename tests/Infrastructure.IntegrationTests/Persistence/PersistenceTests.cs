@@ -30,7 +30,7 @@ public sealed class PersistenceTests(SqlServerFixture sqlServer) : IAsyncLifetim
     public async Task SaveChanges_Should_Persist_User_And_Fill_CreatedAt()
     {
         // Arrange
-        var user = User.Create("John", "Doe", "john@doe.com").Value;
+        var user = User.Create("John", "Doe", "john@doe.com", "hashed-password").Value;
         await using (var context = _database.CreateContext())
         {
             new UserRepository(context).Add(user);
@@ -44,6 +44,7 @@ public sealed class PersistenceTests(SqlServerFixture sqlServer) : IAsyncLifetim
         var saved = await readContext.Users.SingleAsync(u => u.Id == user.Id);
         saved.Should().Be(user);
         saved.Email.Should().Be("john@doe.com");
+        saved.PasswordHash.Should().Be("hashed-password");
         saved.CreatedAt.Should().Be(TestDatabase.Start.UtcDateTime);
         saved.ModifiedAt.Should().BeNull();
     }
@@ -53,10 +54,10 @@ public sealed class PersistenceTests(SqlServerFixture sqlServer) : IAsyncLifetim
     public async Task SaveChanges_Should_Throw_UniqueConstraintViolation_When_Email_Is_Duplicated()
     {
         // Arrange
-        await AddUserAsync(User.Create("John", "Doe", "john@doe.com").Value);
+        await AddUserAsync(User.Create("John", "Doe", "john@doe.com", "hashed-password").Value);
 
         await using var otherContext = _database.CreateContext();
-        new UserRepository(otherContext).Add(User.Create("Johnny", "Doe", "john@doe.com").Value);
+        new UserRepository(otherContext).Add(User.Create("Johnny", "Doe", "john@doe.com", "hashed-password").Value);
 
         // Act
         var act = () => _database.CreateUnitOfWork(otherContext).SaveChangesAsync(default);
@@ -70,7 +71,7 @@ public sealed class PersistenceTests(SqlServerFixture sqlServer) : IAsyncLifetim
     public async Task ExistsByEmailAsync_Should_Find_Only_Saved_Emails()
     {
         // Arrange
-        await AddUserAsync(User.Create("John", "Doe", "john@doe.com").Value);
+        await AddUserAsync(User.Create("John", "Doe", "john@doe.com", "hashed-password").Value);
         await using var context = _database.CreateContext();
         var repository = new UserRepository(context);
 
@@ -84,8 +85,8 @@ public sealed class PersistenceTests(SqlServerFixture sqlServer) : IAsyncLifetim
     public async Task UserQueries_Should_Return_Read_Models_Ordered_By_Creation_Without_Tracking()
     {
         // Arrange
-        var first = User.Create("Zoe", "Doe", "zoe@doe.com").Value;
-        var second = User.Create("Adam", "Doe", "adam@doe.com").Value;
+        var first = User.Create("Zoe", "Doe", "zoe@doe.com", "hashed-password").Value;
+        var second = User.Create("Adam", "Doe", "adam@doe.com", "hashed-password").Value;
         await AddUserAsync(first);
         _database.Clock.Advance(TimeSpan.FromMinutes(1));
         await AddUserAsync(second);
@@ -110,7 +111,7 @@ public sealed class PersistenceTests(SqlServerFixture sqlServer) : IAsyncLifetim
     public async Task SaveChanges_Should_Store_Domain_Events_In_The_Outbox_With_The_Changes()
     {
         // Arrange
-        var user = User.Create("John", "Doe", "john@doe.com").Value;
+        var user = User.Create("John", "Doe", "john@doe.com", "hashed-password").Value;
 
         // Act
         await AddUserAsync(user);
@@ -133,10 +134,10 @@ public sealed class PersistenceTests(SqlServerFixture sqlServer) : IAsyncLifetim
     public async Task SaveChanges_Should_Not_Store_Domain_Events_When_The_Save_Fails()
     {
         // Arrange
-        await AddUserAsync(User.Create("John", "Doe", "john@doe.com").Value);
+        await AddUserAsync(User.Create("John", "Doe", "john@doe.com", "hashed-password").Value);
 
         await using var otherContext = _database.CreateContext();
-        new UserRepository(otherContext).Add(User.Create("Johnny", "Doe", "john@doe.com").Value);
+        new UserRepository(otherContext).Add(User.Create("Johnny", "Doe", "john@doe.com", "hashed-password").Value);
 
         // Act
         var act = () => _database.CreateUnitOfWork(otherContext).SaveChangesAsync(default);

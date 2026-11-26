@@ -132,7 +132,7 @@ internal sealed class AdoUnitOfWork(
     ///     unique violation) aborts the batch and rolls the transaction back.
     ///     Without it a failed INSERT only ends that statement, and the COMMIT
     ///     would store the outbox row of a user that was never saved.
-    ///     SQL Server accepts up to 2100 parameters per command (about 190 users
+    ///     SQL Server accepts up to 2100 parameters per command (about 175 users
     ///     with their events), far more than a unit of work saves today.
     /// </summary>
     private static async Task ExecuteBatchedAsync(List<Statement> statements,
@@ -207,8 +207,8 @@ internal sealed class AdoUnitOfWork(
     private static Statement InsertUser(User user, string p)
     {
         string sql = $"""
-                      INSERT INTO [{Schemas.Accounts}].[Users] ([Id], [Name], [Surname], [Email], [CreatedAt], [ModifiedAt])
-                      VALUES (@{p}Id, @{p}Name, @{p}Surname, @{p}Email, @{p}CreatedAt, NULL);
+                      INSERT INTO [{Schemas.Accounts}].[Users] ([Id], [Name], [Surname], [Email], [PasswordHash], [CreatedAt], [ModifiedAt])
+                      VALUES (@{p}Id, @{p}Name, @{p}Surname, @{p}Email, @{p}PasswordHash, @{p}CreatedAt, NULL);
                       """;
 
         SqlParameter[] parameters =
@@ -217,6 +217,7 @@ internal sealed class AdoUnitOfWork(
             Parameter($"@{p}Name", SqlDbType.NVarChar, user.Name, User.NameMaxLength),
             Parameter($"@{p}Surname", SqlDbType.NVarChar, user.Surname, User.SurnameMaxLength),
             Parameter($"@{p}Email", SqlDbType.NVarChar, user.Email, User.EmailMaxLength),
+            Parameter($"@{p}PasswordHash", SqlDbType.NVarChar, user.PasswordHash, User.PasswordHashMaxLength),
             // DateTime2 explicitly: the default DateTime mapping would round to 3.33 ms.
             Parameter($"@{p}CreatedAt", SqlDbType.DateTime2, user.CreatedAt)
         ];

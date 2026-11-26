@@ -6,7 +6,13 @@ public enum ErrorType
     Unexpected,
     Validation,
     Conflict,
-    NotFound
+    NotFound,
+
+    /// <summary>The caller could not be identified (no valid token, wrong credentials): 401.</summary>
+    Unauthorized,
+
+    /// <summary>The caller is known but may not do this: 403.</summary>
+    Forbidden
 }
 
 /// <param name="Code">Stable identifier in the <c>Area.Name</c> form, e.g. <c>User.InvalidEmail</c>.</param>
@@ -29,4 +35,10 @@ public sealed record Error(string Code, string Description, ErrorType Type, stri
 
     public static Error NotFound(string code, string description) =>
         new(code, description, ErrorType.NotFound);
+
+    public static Error Unauthorized(string code, string description) =>
+        new(code, description, ErrorType.Unauthorized);
+
+    public static Error Forbidden(string code, string description) =>
+        new(code, description, ErrorType.Forbidden);
 }

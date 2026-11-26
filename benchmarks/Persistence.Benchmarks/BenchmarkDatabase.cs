@@ -89,7 +89,7 @@ internal sealed class BenchmarkDatabase : IAsyncDisposable
 
         for (var i = 0; i < SeededUsers; i++)
         {
-            context.Users.Add(User.Create($"Name{i}", $"Surname{i}", $"user{i}@benchmark.com").Value);
+            context.Users.Add(User.Create($"Name{i}", $"Surname{i}", $"user{i}@benchmark.com", "hashed-password").Value);
         }
 
         await context.SaveChangesAsync();

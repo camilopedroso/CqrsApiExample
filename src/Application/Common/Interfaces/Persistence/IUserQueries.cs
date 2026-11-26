@@ -1,3 +1,4 @@
+using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Users;
 
 namespace CqrsApiExample.Application.Common.Interfaces.Persistence;
@@ -39,4 +40,12 @@ public interface IUserQueries
     ///     turns it into <c>User.NotFound</c> (404).
     /// </returns>
     Task<UserDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>The id, email and password hash of the user with this email, for the login.</summary>
+    /// <param name="email">
+    ///     The normalized email (<c>User.NormalizeEmail</c>), as stored; the lookup is an exact match.
+    /// </param>
+    /// <param name="cancellationToken">The request's token.</param>
+    /// <returns><see langword="null" /> when no user has this email.</returns>
+    Task<UserCredentialsDto?> GetCredentialsByEmailAsync(string email, CancellationToken cancellationToken);
 }

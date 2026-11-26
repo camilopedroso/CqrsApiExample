@@ -19,7 +19,7 @@ public class ValidationDecoratorTests
         var decorator = new ValidationDecorator<CreateUserCommand, Result<UserDto>>(inner, new CreateUserCommandValidator());
 
         // Act
-        var result = await decorator.Handle(new CreateUserCommand("", "Doe", "not-an-email"), default);
+        var result = await decorator.Handle(new CreateUserCommand("", "Doe", "not-an-email", "password123"), default);
 
         // Assert
         inner.Calls.Should().Be(0);
@@ -38,7 +38,7 @@ public class ValidationDecoratorTests
         var decorator = new ValidationDecorator<CreateUserCommand, Result<UserDto>>(inner, new CreateUserCommandValidator());
 
         // Act
-        var result = await decorator.Handle(new CreateUserCommand("John", "Doe", "john@doe.com"), default);
+        var result = await decorator.Handle(new CreateUserCommand("John", "Doe", "john@doe.com", "password123"), default);
 
         // Assert
         inner.Calls.Should().Be(1);
@@ -54,7 +54,7 @@ public class ValidationDecoratorTests
         var decorator = new ValidationDecorator<CreateUserCommand, Result<UserDto>>(inner);
 
         // Act
-        await decorator.Handle(new CreateUserCommand("", "", ""), default);
+        await decorator.Handle(new CreateUserCommand("", "", "", "password123"), default);
 
         // Assert
         inner.Calls.Should().Be(1);

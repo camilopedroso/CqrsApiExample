@@ -23,5 +23,9 @@ public static partial class Errors
         public static Error InvalidEmail => Error.Validation(code: "User.InvalidEmail",
                                                              description: $"Email is required and must have at most {User.EmailMaxLength} characters.",
                                                              field: nameof(User.Email));
+        // Only the validator returns it: the domain receives the password already hashed.
+        public static Error InvalidPassword => Error.Validation(code: "User.InvalidPassword",
+                                                                description: $"Password must have between {User.PasswordMinLength} and {User.PasswordMaxLength} characters.",
+                                                                field: "Password");
     }
 }

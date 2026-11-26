@@ -1,5 +1,7 @@
+using CqrsApiExample.Application.Common.Interfaces.Authentication;
 using CqrsApiExample.Application.Common.Interfaces.Notifications;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
+using CqrsApiExample.Infrastructure.Authentication;
 using CqrsApiExample.Infrastructure.Notifications;
 using CqrsApiExample.Infrastructure.Outbox;
 using CqrsApiExample.Infrastructure.Persistence;
@@ -36,17 +38,44 @@ public static class DependencyInjection
     private const string ProviderKey = $"{PersistenceOptions.SectionName}:Provider";
 
     /// <summary>
-    ///     Services that are not persistence: the clock and the email sender.
+    ///     Services that are not persistence: the clock, the email sender, and password hashing
+    ///     and token issuing for authentication.
     /// </summary>
     public static IServiceCollection AddInfrastructure(this IServiceCollection services)
     {
-        // The clock every layer uses (CreatedAt, outbox schedule); tests replace it with a controllable one.
+        // The clock every layer uses (CreatedAt, outbox schedule, token times); tests replace it with a controllable one.
         services.AddSingleton(TimeProvider.System);
 
         // Logs the email instead of sending it; the API integration tests replace it with FakeEmailSender.
         services.AddScoped<IEmailSender, LoggingEmailSender>();
 
+        AddAuthentication(services);
+
         return services;
+    }
+
+    /// <summary>
+    ///     PBKDF2 password hashing and JWT access tokens. The <c>Jwt</c> section is bound when
+    ///     first needed (so tests can add settings afterwards) and validated at startup.
+    /// </summary>
+    private static void AddAuthentication(IServiceCollection services)
+    {
+        services.AddOptions<JwtOptions>()
+                .BindConfiguration(JwtOptions.SectionName)
+                .Validate(options => !string.IsNullOrWhiteSpace(options.Issuer),
+                          $"{JwtOptions.SectionName}:Issuer is required.")
+                .Validate(options => !string.IsNullOrWhiteSpace(options.Audience),
+                          $"{JwtOptions.SectionName}:Audience is required.")
+                .Validate(options => options.HasValidSigningKey(),
+                          $"{JwtOptions.SectionName}:SigningKey must have at least {JwtOptions.MinimumSigningKeyBytes} bytes. " +
+                          $"Provide it per environment (e.g. {JwtOptions.SectionName}__SigningKey); it is not in appsettings.json on purpose.")
+                .Validate(options => options.AccessTokenLifetime > TimeSpan.Zero,
+                          $"{JwtOptions.SectionName}:AccessTokenLifetime must be positive.")
+                .ValidateOnStart();
+
+        // Both stateless: one instance for the whole app.
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
+        services.AddSingleton<IAccessTokenIssuer, JwtAccessTokenIssuer>();
     }
 
     /// <summary>

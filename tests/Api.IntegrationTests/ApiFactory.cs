@@ -1,4 +1,7 @@
 using System.Collections.Concurrent;
+using System.Net.Http.Headers;
+using CqrsApiExample.Application.Auth;
+using CqrsApiExample.Application.Common.Interfaces.Authentication;
 using CqrsApiExample.Application.Common.Interfaces.Notifications;
 using CqrsApiExample.Infrastructure.Outbox;
 using CqrsApiExample.Tests.Shared;
@@ -64,6 +67,22 @@ public sealed class ApiFactory(string connectionString,
                                IReadOnlyDictionary<string, string?>? settings = null) : WebApplicationFactory<Program>
 {
     public FakeEmailSender Emails { get; } = new();
+
+    /// <summary>
+    ///     A client that sends a valid access token, issued directly by the API's own issuer, so a
+    ///     test that is not about authentication doesn't pay for a registration and a login.
+    ///     The token is for <paramref name="userId"/> (a random id by default: nothing checks that
+    ///     the user exists).
+    /// </summary>
+    public HttpClient CreateAuthenticatedClient(Guid? userId = null)
+    {
+        var issuer = Services.GetRequiredService<IAccessTokenIssuer>();
+        var accessToken = issuer.Issue(new UserCredentialsDto(userId ?? Guid.NewGuid(), "unused-hash"));
+
+        var client = CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.AccessToken);
+        return client;
+    }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

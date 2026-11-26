@@ -1,6 +1,8 @@
 using System.Data;
+using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
 using CqrsApiExample.Application.Users;
+using CqrsApiExample.Domain.UserAggregate;
 using Microsoft.Data.SqlClient;
 
 namespace CqrsApiExample.Infrastructure.Persistence.Ado;
@@ -33,6 +35,12 @@ internal sealed class AdoUserQueries(SqlConnectionFactory connections) : IUserQu
     private const int NameOrdinal = 1;
     private const int SurnameOrdinal = 2;
     private const int EmailOrdinal = 3;
+
+    // Only what the login needs, never the rest of the user. Id is ordinal 0 here too.
+    private const string GetCredentialsByEmailSql =
+        $"SELECT [Id], [PasswordHash] FROM [{Schemas.Accounts}].[Users] WHERE [Email] = @Email";
+
+    private const int PasswordHashOrdinal = 1;
 
     public Task<List<UserDto>> GetAllAsync(CancellationToken cancellationToken)
     {
@@ -88,6 +96,44 @@ internal sealed class AdoUserQueries(SqlConnectionFactory connections) : IUserQu
             UserDto user = Read(reader);
 
             return user;
+        }
+    }
+
+    /// <summary>
+    ///     The login's lookup: id and password hash of the user with this (normalized) email,
+    ///     or <c>null</c>. Uses the unique index on Email.
+    /// </summary>
+    public Task<UserCredentialsDto?> GetCredentialsByEmailAsync(string email, CancellationToken cancellationToken)
+    {
+        return AdoRetry.ExecuteAsync(GetCredentialsOnceAsync, cancellationToken);
+
+        async Task<UserCredentialsDto?> GetCredentialsOnceAsync(CancellationToken token)
+        {
+            await using SqlConnection connection = await connections.OpenAsync(token);
+            await using SqlCommand command = new(GetCredentialsByEmailSql, connection);
+
+            // Sized like the column (nvarchar(256)), so every email length shares one query plan.
+            SqlParameter emailParameter = new("@Email", SqlDbType.NVarChar, User.EmailMaxLength)
+            {
+                Value = email
+            };
+            command.Parameters.Add(emailParameter);
+
+            await using SqlDataReader reader = await command.ExecuteReaderAsync(CommandBehavior.SingleRow, token);
+
+            bool found = await reader.ReadAsync(token);
+
+            if (!found)
+            {
+                return null;
+            }
+
+            Guid id = reader.GetGuid(IdOrdinal);
+            string passwordHash = reader.GetString(PasswordHashOrdinal);
+
+            UserCredentialsDto credentials = new(id, passwordHash);
+
+            return credentials;
         }
     }
 

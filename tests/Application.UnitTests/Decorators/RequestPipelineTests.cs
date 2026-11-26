@@ -1,4 +1,5 @@
 using CqrsApiExample.Application.Common.Decorators;
+using CqrsApiExample.Application.Common.Interfaces.Authentication;
 using CqrsApiExample.Application.Common.Interfaces.Notifications;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
 using CqrsApiExample.Application.Common.Messaging;
@@ -33,7 +34,7 @@ public class RequestPipelineTests
             .ToList();
 
         // Assert
-        handlerInterfaces.Should().HaveCount(3, "CreateUser, GetAllUsers and GetUserById");
+        handlerInterfaces.Should().HaveCount(4, "CreateUser, GetAllUsers, GetUserById and Login");
         foreach (var handlerInterface in handlerInterfaces)
         {
             var outer = scope.ServiceProvider.GetRequiredService(handlerInterface);
@@ -55,7 +56,7 @@ public class RequestPipelineTests
         var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<CreateUserCommand, Result<UserDto>>>();
 
         // Act
-        var result = await handler.Handle(new CreateUserCommand("", "Doe", "john@doe.com"), default);
+        var result = await handler.Handle(new CreateUserCommand("", "Doe", "john@doe.com", "password123"), default);
 
         // Assert
         result.Errors.Should().ContainSingle().Which.Code.Should().Be("User.InvalidName");
@@ -72,7 +73,7 @@ public class RequestPipelineTests
         var handler = scope.ServiceProvider.GetRequiredService<IRequestHandler<CreateUserCommand, Result<UserDto>>>();
 
         // Act
-        var result = await handler.Handle(new CreateUserCommand("John", "Doe", "john@doe.com"), default);
+        var result = await handler.Handle(new CreateUserCommand("John", "Doe", "john@doe.com", "password123"), default);
 
         // Assert
         result.IsError.Should().BeFalse();
@@ -88,6 +89,8 @@ public class RequestPipelineTests
         services.AddSingleton(_unitOfWork.Object);
         services.AddSingleton(Mock.Of<IUserQueries>());
         services.AddSingleton(Mock.Of<IEmailSender>());
+        services.AddSingleton(Mock.Of<IPasswordHasher>(hasher => hasher.Hash(It.IsAny<string>()) == "hashed-password"));
+        services.AddSingleton(Mock.Of<IAccessTokenIssuer>());
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 

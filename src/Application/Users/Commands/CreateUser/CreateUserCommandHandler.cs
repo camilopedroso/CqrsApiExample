@@ -1,4 +1,5 @@
 using CqrsApiExample.Application.Common.Exceptions;
+using CqrsApiExample.Application.Common.Interfaces.Authentication;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
 using CqrsApiExample.Application.Common.Messaging;
 using CqrsApiExample.Domain.Common.DomainErrors;
@@ -31,15 +32,20 @@ namespace CqrsApiExample.Application.Users.Commands.CreateUser;
 /// </remarks>
 public sealed class CreateUserCommandHandler(
     IUserRepository userRepository,
-    IUnitOfWork unitOfWork) : IRequestHandler<CreateUserCommand, Result<UserDto>>
+    IUnitOfWork unitOfWork,
+    IPasswordHasher passwordHasher) : IRequestHandler<CreateUserCommand, Result<UserDto>>
 {
     public async Task<Result<UserDto>> Handle(
         CreateUserCommand request,
         CancellationToken cancellationToken)
     {
+        // The validator already checked the password rules. Only the hash goes any further:
+        // the domain, the database and the logs never see the password itself.
+        string passwordHash = passwordHasher.Hash(request.Password);
+
         // The factory enforces the domain invariants (they repeat the validator's checks,
         // with the same error codes) and raises UserCreatedDomainEvent inside the aggregate.
-        Result<User> userResult = User.Create(request.Name, request.Surname, request.Email);
+        Result<User> userResult = User.Create(request.Name, request.Surname, request.Email, passwordHash);
 
         if (userResult.IsError)
         {

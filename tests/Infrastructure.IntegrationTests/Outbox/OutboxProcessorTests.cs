@@ -189,7 +189,7 @@ public sealed class OutboxProcessorTests(SqlServerFixture sqlServer) : IAsyncLif
 
     private async Task<User> AddUserAsync(string email)
     {
-        var user = User.Create("John", "Doe", email).Value;
+        var user = User.Create("John", "Doe", email, "hashed-password").Value;
         await using var context = _database.CreateContext();
         new UserRepository(context).Add(user);
         await _database.CreateUnitOfWork(context).SaveChangesAsync(default);

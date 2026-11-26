@@ -1,3 +1,4 @@
+using System.Text;
 using CqrsApiExample.Application.Common.Messaging;
 using CqrsApiExample.Domain.Common.Results;
 
@@ -25,7 +26,22 @@ namespace CqrsApiExample.Application.Users.Commands.CreateUser;
 /// <param name="Name">The user's first name.</param>
 /// <param name="Surname">The user's last name.</param>
 /// <param name="Email">The email address; it must not belong to another user (409 otherwise).</param>
+/// <param name="Password">
+///     The plain password the user will log in with. The handler hashes it; it is never stored
+///     or logged as typed.
+/// </param>
 public sealed record CreateUserCommand(
     string Name,
     string Surname,
-    string Email) : ICommand<Result<UserDto>>;
+    string Email,
+    string Password) : ICommand<Result<UserDto>>
+{
+    // A record's ToString prints every property. This replaces the generated member list so
+    // the password never shows up in a log or an exception message by accident.
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append($"Name = {Name}, Surname = {Surname}, Email = {Email}, Password = ***");
+
+        return true;
+    }
+}

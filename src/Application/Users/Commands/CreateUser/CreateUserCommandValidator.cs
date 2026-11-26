@@ -53,5 +53,14 @@ public sealed class CreateUserCommandValidator : AbstractValidator<CreateUserCom
             .NotEmpty().WithErrorCode(Errors.Users.InvalidEmail.Code)
             .MaximumLength(User.EmailMaxLength).WithErrorCode(Errors.Users.InvalidEmail.Code)
             .EmailAddress().WithErrorCode(Errors.Users.InvalidEmail.Code);
+
+        // Length only, as current guidance (NIST SP 800-63B) recommends: no forced mix of
+        // character classes. The maximum keeps huge inputs away from the slow hasher.
+        // The message is the domain error's, so it states both limits at once.
+        RuleFor(x => x.Password)
+            .NotEmpty().WithErrorCode(Errors.Users.InvalidPassword.Code)
+            .WithMessage(Errors.Users.InvalidPassword.Description)
+            .Length(User.PasswordMinLength, User.PasswordMaxLength).WithErrorCode(Errors.Users.InvalidPassword.Code)
+            .WithMessage(Errors.Users.InvalidPassword.Description);
     }
 }

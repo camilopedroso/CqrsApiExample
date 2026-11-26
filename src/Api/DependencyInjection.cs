@@ -1,7 +1,14 @@
 using CqrsApiExample.Api.Common.Errors;
+using CqrsApiExample.Api.Common.OpenApi;
 using CqrsApiExample.Domain.Common.Results;
+using CqrsApiExample.Infrastructure.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 
 namespace CqrsApiExample.Api;
 
@@ -24,11 +31,68 @@ public static class DependencyInjection
     {
         AddControllers(services);
         AddErrorResponses(services);
+        AddAuthentication(services);
 
         // The OpenAPI document; Program.cs maps it (/openapi/v1.json) and the Swagger UI in Development.
-        services.AddOpenApi();
+        // The transformers describe the bearer token, so Swagger UI shows an "Authorize" button.
+        services.AddOpenApi(options =>
+        {
+            options.AddDocumentTransformer<BearerSecuritySchemeTransformer>();
+            options.AddOperationTransformer<BearerSecurityRequirementTransformer>();
+        });
 
         return services;
+    }
+
+    /// <summary>
+    ///     JWT bearer tokens, validated with the same <c>Jwt</c> settings the Infrastructure issues
+    ///     them with, and a fallback policy that makes every endpoint require a valid token unless it
+    ///     says <c>[AllowAnonymous]</c>: a new endpoint is protected by default, not by remembering.
+    /// </summary>
+    /// <remarks>
+    ///     A request without a valid token never reaches a controller: the authorization middleware
+    ///     answers 401 with an empty body and a <c>WWW-Authenticate</c> header, and
+    ///     <c>UseStatusCodePages</c> turns it into a ProblemDetails with <c>Request.Unauthorized</c>.
+    /// </remarks>
+    private static void AddAuthentication(IServiceCollection services)
+    {
+        services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+                .AddJwtBearer();
+
+        // Configured from JwtOptions (bound and validated by AddInfrastructure) when first used,
+        // so tests can change the settings after AddPresentation runs.
+        services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
+                .Configure<IOptions<JwtOptions>>(ConfigureJwtBearer);
+
+        AuthorizationPolicy requireAuthenticatedUser = new AuthorizationPolicyBuilder()
+                                                           .RequireAuthenticatedUser()
+                                                           .Build();
+
+        services.AddAuthorizationBuilder()
+                .SetFallbackPolicy(requireAuthenticatedUser);
+
+        static void ConfigureJwtBearer(JwtBearerOptions bearer, IOptions<JwtOptions> jwtOptions)
+        {
+            JwtOptions jwt = jwtOptions.Value;
+            SymmetricSecurityKey signingKey = jwt.CreateSigningKey();
+
+            // Keeps the claim names as they are in the token ("sub"), instead of renaming them to
+            // the long WS-* URIs (http://schemas.xmlsoap.org/.../nameidentifier).
+            bearer.MapInboundClaims = false;
+
+            bearer.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidIssuer = jwt.Issuer,
+                ValidAudience = jwt.Audience,
+                IssuerSigningKey = signingKey,
+                // Only the algorithm the issuer uses: a token signed any other way (or "none") is rejected.
+                ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
+                // Tolerance for clocks that disagree a little; the default (5 min) would stretch
+                // every token's lifetime by that much.
+                ClockSkew = TimeSpan.FromSeconds(30),
+                NameClaimType = JwtRegisteredClaimNames.Sub
+            };
+        }
     }
 
     /// <summary>
@@ -91,7 +155,7 @@ public static class DependencyInjection
         int statusCode = problem.Status ?? context.HttpContext.Response.StatusCode;
         Error? error = RequestErrors.ForStatusCode(statusCode);
 
-        // Only 404, 405 and 415 have a request-level error; any other status keeps the problem as it is.
+        // Only 401, 403, 404, 405 and 415 have a request-level error; any other status keeps the problem as it is.
         if (error is null)
         {
             return;

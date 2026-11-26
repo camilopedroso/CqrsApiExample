@@ -1,4 +1,5 @@
 using System.Net;
+using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
 using CqrsApiExample.Application.Users;
 using FluentAssertions;
@@ -15,7 +16,7 @@ public sealed class UnexpectedErrorTests(ApiFixture api)
     {
         // Arrange
         await using var factory = api.CreateFactory(services => services.AddScoped<IUserQueries, FailingUserQueries>());
-        using var client = factory.CreateClient();
+        using var client = factory.CreateAuthenticatedClient();
 
         // Act
         var response = await client.GetAsync("/api/users");
@@ -34,6 +35,9 @@ public sealed class UnexpectedErrorTests(ApiFixture api)
             throw new InvalidOperationException(Message);
 
         public Task<UserDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
+            throw new InvalidOperationException(Message);
+
+        public Task<UserCredentialsDto?> GetCredentialsByEmailAsync(string email, CancellationToken cancellationToken) =>
             throw new InvalidOperationException(Message);
     }
 }

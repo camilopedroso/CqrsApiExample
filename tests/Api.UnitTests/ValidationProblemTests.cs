@@ -43,7 +43,7 @@ public class ValidationProblemTests
         };
 
         // Act
-        var result = await controller.CreateUser(new CreateUserRequest("", "Doe", "x"),
+        var result = await controller.CreateUser(new CreateUserRequest("", "Doe", "x", "password123"),
                                                  handler.Object,
                                                  CancellationToken.None);
 

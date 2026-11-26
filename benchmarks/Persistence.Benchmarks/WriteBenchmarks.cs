@@ -52,5 +52,5 @@ public class WriteBenchmarks
     }
 
     private static User NewUser() =>
-        User.Create("Ana", "Silva", $"{Guid.NewGuid():N}@benchmark.com").Value;
+        User.Create("Ana", "Silva", $"{Guid.NewGuid():N}@benchmark.com", "hashed-password").Value;
 }

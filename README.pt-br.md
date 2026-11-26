@@ -26,8 +26,11 @@ domínio entregues por um outbox transacional, dois provedores de persistência 
 - **Dois provedores de persistência, uma flag.** `Persistence:Provider` escolhe EF Core ou ADO.NET
   escrito à mão por trás das mesmas interfaces, com a mesma garantia do outbox. Os dois são
   instrumentados com logs e um histograma de métricas, e comparados com BenchmarkDotNet.
+- **Autenticação com JWT.** O cadastro grava um hash PBKDF2 da senha; `POST /api/auth/login`
+  emite um access token HS256 de vida curta. Todo endpoint exige token, a não ser que declare
+  `[AllowAnonymous]` (uma fallback policy), e um teste de arquitetura obriga cada action a dizer qual.
 - **Erros consistentes.** Todo erro, inclusive os que o framework gera (rota inexistente, JSON
-  malformado, 405, 415), é um ProblemDetails (RFC 9457) com `errorCodes` e um `traceId`.
+  malformado, token ausente, 405, 415), é um ProblemDetails (RFC 9457) com `errorCodes` e um `traceId`.
 - **Testes por camada.** Testes unitários, testes de integração contra um SQL Server real
   (Testcontainers), testes HTTP com `WebApplicationFactory` e testes de arquitetura que garantem as
   regras entre camadas.
@@ -58,7 +61,7 @@ dotnet run --project src/Api
 Depois abra <http://localhost:5235/swagger>. O documento OpenAPI fica em `/openapi/v1.json`.
 
 No ambiente Development, a API aplica as migrations do EF Core e cria um usuário inicial
-(Jane Doe). O SQL Server escuta em `127.0.0.1:14330` (banco `CqrsApi`) com uma senha de SA só para
+(`jane.doe@example.com`, senha `JaneDoe.Dev.2026`, só para uso local). O SQL Server escuta em `127.0.0.1:14330` (banco `CqrsApi`) com uma senha de SA só para
 uso local; defina `MSSQL_SA_PASSWORD` para usar outra. Fora de Development nada é aplicado
 automaticamente: rode as migrations como uma etapa do deploy e forneça `ConnectionStrings__Database`.
 
@@ -68,18 +71,41 @@ incluindo os casos de erro.
 
 ## API
 
-| Método | Rota | Sucesso | Erros |
-|---|---|---|---|
-| `GET` | `/api/users` | `200` lista ordenada pela data de criação | |
-| `GET` | `/api/users/{id}` | `200` o usuário | `400 User.InvalidId`, `404 User.NotFound` |
-| `POST` | `/api/users` | `201` com `Location` | `400` validação, `409 User.DuplicateEmail` |
+| Método | Rota | Token | Sucesso | Erros |
+|---|---|---|---|---|
+| `POST` | `/api/users` | não | `201` com `Location` | `400` validação, `409 User.DuplicateEmail` |
+| `POST` | `/api/auth/login` | não | `200` access token | `400` validação, `401 Auth.InvalidCredentials` |
+| `GET` | `/api/users` | sim | `200` lista ordenada pela data de criação | `401 Request.Unauthorized` |
+| `GET` | `/api/users/{id}` | sim | `200` o usuário | `400 User.InvalidId`, `401`, `404 User.NotFound` |
 
 ```http
 POST /api/users
 Content-Type: application/json
 
-{ "name": "John", "surname": "Doe", "email": "john@doe.com" }
+{ "name": "John", "surname": "Doe", "email": "john@doe.com", "password": "pelo menos 8 caracteres" }
 ```
+
+Depois faça login e envie o token nas rotas protegidas:
+
+```http
+POST /api/auth/login
+Content-Type: application/json
+
+{ "email": "john@doe.com", "password": "pelo menos 8 caracteres" }
+```
+
+```json
+{ "accessToken": "eyJhbGciOi...", "tokenType": "Bearer", "expiresIn": 1800 }
+```
+
+```http
+GET /api/users
+Authorization: Bearer eyJhbGciOi...
+```
+
+No Swagger UI, use o botão **Authorize**. Senha errada e email desconhecido recebem o mesmo
+`401 Auth.InvalidCredentials`, então a API nunca revela quais emails têm conta. Um token ausente,
+expirado ou com assinatura inválida recebe `401 Request.Unauthorized` com o header `WWW-Authenticate`.
 
 Os erros usam `application/problem+json`. Os clientes devem decidir pelos `errorCodes`, não pelas
 mensagens:
@@ -130,6 +156,12 @@ Mais detalhes:
 |---|---|---|
 | `ConnectionStrings:Database` | connection string do SQL Server | nenhum fora de Development |
 | `Persistence:Provider` | `Ado` ou `EfCore` | `Ado` no `appsettings.json` |
+| `Jwt:SigningKey` | pelo menos 32 bytes; assina e valida os tokens | nenhum fora de Development |
+| `Jwt:Issuer`, `Jwt:Audience` | emissor e audiência do token | `CqrsApiExample`, `CqrsApiExample.Api` |
+| `Jwt:AccessTokenLifetime` | `hh:mm:ss` | `00:30:00` |
+
+A chave de assinatura é como a connection string: não está no `appsettings.json`, então cada
+ambiente precisa fornecer a sua (`Jwt__SigningKey`), e a API não inicia sem uma chave válida.
 
 Variáveis de ambiente usam `__` como separador (`Persistence__Provider=EfCore`). Com o Compose:
 `PERSISTENCE_PROVIDER=EfCore docker compose up`.

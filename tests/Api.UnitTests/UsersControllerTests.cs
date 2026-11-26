@@ -133,7 +133,7 @@ public class UsersControllerTests
         // Act
         var result = await _controller.CreateUser(new CreateUserRequest(user.Name,
                                                                         user.Surname,
-                                                                        user.Email),
+                                                                        user.Email, "password123"),
                                                         _createUser.Object,
                                                         CancellationToken.None);
 
@@ -165,7 +165,7 @@ public class UsersControllerTests
         // Act
         var result = await _controller.CreateUser(new CreateUserRequest(user.Name,
                                                                         user.Surname,
-                                                                        user.Email),
+                                                                        user.Email, "password123"),
                                                         _createUser.Object,
                                                         CancellationToken.None);
 
