@@ -91,11 +91,12 @@ jobs:
       - name: Build image
         run: docker build --tag cqrs-api-example:ci .
 
-      # Pinned to 0.36.0 on purpose: tags 0.0.1-0.34.2 of trivy-action were force-pushed to
-      # credential-stealing code in March 2026 (GHSA-69fq-xp46-6x23). Prefer pinning to the
-      # commit SHA of a release you have checked; Dependabot keeps such pins up to date.
+      # Pinned to the commit of v0.36.0 (released 2026-04-22), not to a tag: tags 0.0.1-0.34.2 of
+      # trivy-action were force-pushed to credential-stealing code in March 2026
+      # (GHSA-69fq-xp46-6x23), and a tag can be moved again; a commit SHA can't. Dependabot
+      # updates SHA pins and keeps the version comment in sync.
       - name: Scan image for vulnerabilities
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: cqrs-api-example:ci
           severity: HIGH,CRITICAL
@@ -104,7 +105,7 @@ jobs:
           format: table
 
       - name: Scan Dockerfile and compose.yaml for misconfigurations
-        uses: aquasecurity/trivy-action@0.36.0
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: config
           scan-ref: .
