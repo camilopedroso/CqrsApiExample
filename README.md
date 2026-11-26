@@ -36,6 +36,9 @@ consistent error responses, and tests at every layer.
   per IP, everything else per user; over the limit the API answers `429` with `Retry-After`. Every
   response carries security headers (`nosniff`, frame denial, a strict CSP), CORS allows only the
   configured origins, and Kestrel caps request bodies at 64 KB.
+- **Least-privilege database access.** The API connects as `cqrs_api_app`, a login that may only read
+  and write rows in its own schemas (a role created by a migration). Migrations and the seed run as
+  `sa`, only at startup in Development. Integration tests prove the login can't alter the schema.
 - **Consistent errors.** Every error, including the ones the framework raises (unknown route,
   malformed JSON, missing token, 405, 415), is an RFC 9457 ProblemDetails with `errorCodes` and a `traceId`.
 - **Tests per layer.** Unit tests, integration tests against a real SQL Server (Testcontainers),
@@ -162,6 +165,7 @@ More detail:
 | Key | Values | Default |
 |---|---|---|
 | `ConnectionStrings:Database` | SQL Server connection string | none outside Development |
+| `ConnectionStrings:Migrations` | admin connection for migrations and seed (Development only) | falls back to `Database` |
 | `Persistence:Provider` | `Ado` or `EfCore` | `Ado` in `appsettings.json` |
 | `Jwt:SigningKey` | at least 32 bytes; signs and validates tokens | none outside Development |
 | `Jwt:Issuer`, `Jwt:Audience` | token issuer and audience | `CqrsApiExample`, `CqrsApiExample.Api` |
@@ -172,6 +176,13 @@ More detail:
 
 The signing key is like the connection string: not in `appsettings.json`, so every environment
 must provide its own (`Jwt__SigningKey`), and the API refuses to start without a valid one.
+Locally you can keep secrets out of the files with `dotnet user-secrets set Jwt:SigningKey "..." --project src/Api`;
+in other environments use environment variables or a vault (for example Azure Key Vault).
+
+In Development and Compose the API connects as the least-privilege login `cqrs_api_app`
+(`MSSQL_APP_PASSWORD` overrides its local password); `sa` (`ConnectionStrings:Migrations`) only
+applies the migrations, creates that login and seeds. In production, create a login once, add its
+database user to the `cqrs_api_app_role` role, and give the API only that login.
 
 Environment variables use `__` as the separator (`Persistence__Provider=EfCore`). With Compose:
 `PERSISTENCE_PROVIDER=EfCore docker compose up`.

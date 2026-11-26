@@ -1,5 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
+  <!--
+    Lets each developer keep secrets out of the repository (dotnet user-secrets set Jwt:SigningKey ...).
+    In Development they override appsettings.Development.json; elsewhere use environment variables
+    or a vault.
+  -->
+  <PropertyGroup>
+    <UserSecretsId>cqrs-api-example-8c1f4b2e</UserSecretsId>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" />

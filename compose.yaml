@@ -10,6 +10,7 @@
 #   - database "CqrsApi".
 # The SA password defaults to the local-only value also used in appsettings.Development.json and
 # .vscode/settings.json. Override it with MSSQL_SA_PASSWORD (environment or a .env file).
+# The API itself connects as the least-privilege login cqrs_api_app (MSSQL_APP_PASSWORD).
 # Ports are bound to 127.0.0.1.
 name: cqrs-api-example
 
@@ -42,7 +43,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       # Ado (default, as in appsettings.json) or EfCore: PERSISTENCE_PROVIDER=EfCore docker compose up
       Persistence__Provider: ${PERSISTENCE_PROVIDER:-Ado}
-      ConnectionStrings__Database: "Server=db,1433;Database=CqrsApi;User Id=sa;Password=${MSSQL_SA_PASSWORD:-CqrsApi_Dev_2026!};Encrypt=True;TrustServerCertificate=True"
+      # The API runs as cqrs_api_app (rows in its own schemas only); sa is used just to apply the
+      # migrations and create that login at startup (Development only, see DbInitializer).
+      ConnectionStrings__Database: "Server=db,1433;Database=CqrsApi;User Id=cqrs_api_app;Password=${MSSQL_APP_PASSWORD:-CqrsApi_App_Dev_2026!};Encrypt=True;TrustServerCertificate=True"
+      ConnectionStrings__Migrations: "Server=db,1433;Database=CqrsApi;User Id=sa;Password=${MSSQL_SA_PASSWORD:-CqrsApi_Dev_2026!};Encrypt=True;TrustServerCertificate=True"
     ports:
       - "127.0.0.1:5235:8080"
     depends_on:

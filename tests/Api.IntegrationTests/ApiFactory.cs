@@ -9,6 +9,7 @@ using CqrsApiExample.Tests.Shared;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace CqrsApiExample.Api.IntegrationTests;
@@ -43,6 +44,28 @@ public sealed class ApiFixture : IAsyncLifetime
         await Factory.DisposeAsync();
         await AdoFactory.DisposeAsync();
         await _sqlServer.DisposeAsync();
+    }
+
+    /// <summary>
+    ///     The API as it runs in Development: migrations and seed over the admin (sa) login, the app
+    ///     itself over a least-privilege login that startup creates (a new one per factory, because
+    ///     logins are server-wide).
+    /// </summary>
+    public ApiFactory CreateLeastPrivilegeFactory()
+    {
+        var adminConnectionString = _sqlServer.CreateDatabaseConnectionString();
+        var applicationConnectionString = new SqlConnectionStringBuilder(adminConnectionString)
+        {
+            UserID = $"app_{Guid.NewGuid():N}",
+            Password = "Test_App_Passw0rd!"
+        }.ConnectionString;
+
+        return new ApiFactory(adminConnectionString,
+                              settings: new Dictionary<string, string?>
+                              {
+                                  ["ConnectionStrings:Database"] = applicationConnectionString,
+                                  ["ConnectionStrings:Migrations"] = adminConnectionString
+                              });
     }
 
     public ApiFactory CreateFactory(Action<IServiceCollection>? configureServices = null,
@@ -89,6 +112,9 @@ public sealed class ApiFactory(string connectionString,
     {
         builder.UseEnvironment("Development");
         builder.UseSetting("ConnectionStrings:Database", connectionString);
+        // appsettings.Development.json points Migrations at the local container; here both use the test
+        // database (CreateLeastPrivilegeFactory then gives the app a login of its own).
+        builder.UseSetting("ConnectionStrings:Migrations", connectionString);
         builder.UseSetting("Logging:LogLevel:Default", "Warning");
         // The tests share one client address (TestServer has none), so the real limits would trip
         // them; RateLimitingTests sets low ones on purpose.

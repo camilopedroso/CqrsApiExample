@@ -38,6 +38,9 @@ domínio entregues por um outbox transacional, dois provedores de persistência 
   de requisições por IP, o resto por usuário; acima do limite a API responde `429` com `Retry-After`.
   Toda resposta leva headers de segurança (`nosniff`, bloqueio de frames, uma CSP restrita), o CORS só
   libera as origens configuradas e o Kestrel limita o corpo das requisições a 64 KB.
+- **Acesso ao banco com privilégio mínimo.** A API conecta como `cqrs_api_app`, um login que só lê e
+  grava linhas nos próprios schemas (uma role criada por migration). Migrations e seed rodam como
+  `sa`, só na inicialização em Development. Testes de integração provam que o login não altera o schema.
 - **Erros consistentes.** Todo erro, inclusive os que o framework gera (rota inexistente, JSON
   malformado, token ausente, 405, 415), é um ProblemDetails (RFC 9457) com `errorCodes` e um `traceId`.
 - **Testes por camada.** Testes unitários, testes de integração contra um SQL Server real
@@ -166,6 +169,7 @@ Mais detalhes:
 | Chave | Valores | Padrão |
 |---|---|---|
 | `ConnectionStrings:Database` | connection string do SQL Server | nenhum fora de Development |
+| `ConnectionStrings:Migrations` | conexão de administrador para migrations e seed (só em Development) | usa `Database` |
 | `Persistence:Provider` | `Ado` ou `EfCore` | `Ado` no `appsettings.json` |
 | `Jwt:SigningKey` | pelo menos 32 bytes; assina e valida os tokens | nenhum fora de Development |
 | `Jwt:Issuer`, `Jwt:Audience` | emissor e audiência do token | `CqrsApiExample`, `CqrsApiExample.Api` |
@@ -176,6 +180,13 @@ Mais detalhes:
 
 A chave de assinatura é como a connection string: não está no `appsettings.json`, então cada
 ambiente precisa fornecer a sua (`Jwt__SigningKey`), e a API não inicia sem uma chave válida.
+Localmente dá para manter segredos fora dos arquivos com `dotnet user-secrets set Jwt:SigningKey "..." --project src/Api`;
+nos outros ambientes use variáveis de ambiente ou um cofre (por exemplo o Azure Key Vault).
+
+Em Development e no Compose a API conecta com o login de privilégio mínimo `cqrs_api_app`
+(`MSSQL_APP_PASSWORD` troca a senha local); o `sa` (`ConnectionStrings:Migrations`) só aplica as
+migrations, cria esse login e faz o seed. Em produção, crie um login uma vez, coloque o usuário dele
+na role `cqrs_api_app_role` e dê à API apenas esse login.
 
 Variáveis de ambiente usam `__` como separador (`Persistence__Provider=EfCore`). Com o Compose:
 `PERSISTENCE_PROVIDER=EfCore docker compose up`.

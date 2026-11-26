@@ -14,6 +14,9 @@ internal sealed class TestDatabase(SqlServerFixture sqlServer)
 
     private readonly string _connectionString = sqlServer.CreateDatabaseConnectionString();
 
+    /// <summary>The database as the admin (sa) login: what the migrations use.</summary>
+    public string ConnectionString => _connectionString;
+
     public TestClock Clock { get; } = new(Start);
 
     /// <summary>Who the audit fields record; anonymous until a test signs someone in.</summary>
