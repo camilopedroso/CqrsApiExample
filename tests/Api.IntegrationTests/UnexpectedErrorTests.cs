@@ -2,6 +2,7 @@ using System.Net;
 using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Common.Interfaces.Persistence;
 using CqrsApiExample.Application.Users;
+using CqrsApiExample.Domain.UserAggregate;
 using FluentAssertions;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -16,7 +17,7 @@ public sealed class UnexpectedErrorTests(ApiFixture api)
     {
         // Arrange
         await using var factory = api.CreateFactory(services => services.AddScoped<IUserQueries, FailingUserQueries>());
-        using var client = factory.CreateAuthenticatedClient();
+        using var client = factory.CreateAuthenticatedClient(role: UserRole.Admin);
 
         // Act
         var response = await client.GetAsync("/api/users");

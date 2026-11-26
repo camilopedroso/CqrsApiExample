@@ -11,7 +11,7 @@ namespace CqrsApiExample.Application.UnitTests.Auth;
 
 public class LoginCommandTests
 {
-    private static readonly UserCredentialsDto Credentials = new(Guid.NewGuid(), "stored-hash");
+    private static readonly UserCredentialsDto Credentials = new(Guid.NewGuid(), "stored-hash", UserRole.Member);
     private static readonly AccessTokenDto Token = new("a.jwt.token", TimeSpan.FromMinutes(30));
 
     private readonly Mock<IUserQueries> _userQueries = new();

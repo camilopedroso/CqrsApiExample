@@ -18,7 +18,7 @@ namespace CqrsApiExample.Application.Auth.Commands.Login;
 ///         response (or how long it takes) would tell anyone which emails have an account.
 ///     </para>
 ///     <para>
-///         Callers get it wrapped in <c>LoggingDecorator</c> → <c>ValidationDecorator</c>, so the
+///         Callers get it wrapped in <c>LoggingDecorator</c> → <c>AuthorizationDecorator</c> → <c>ValidationDecorator</c>, so the
 ///         failed attempts are logged as <c>LoginCommand failed ... with Auth.InvalidCredentials</c>,
 ///         without the email or the password.
 ///     </para>

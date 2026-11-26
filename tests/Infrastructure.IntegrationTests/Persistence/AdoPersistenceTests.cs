@@ -178,10 +178,11 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
 
     [Fact]
     [Trait("Category", "Persistence")]
-    public async Task GetCredentialsByEmailAsync_Should_Return_The_Stored_Hash_Like_EF_Core()
+    public async Task GetCredentialsByEmailAsync_Should_Return_The_Stored_Hash_And_Role_Like_EF_Core()
     {
         // Arrange: inserted by the ADO.NET unit of work, so the hash column is written by hand-written SQL too
         var user = User.Create("John", "Doe", "john@doe.com", "stored-hash").Value;
+        user.GrantAdmin();
         await AddUserAsync(user);
         await using var context = _database.CreateContext();
 
@@ -191,7 +192,7 @@ public abstract class AdoPersistenceContract : IAsyncLifetime
         var missing = await _database.CreateAdoScope(_mode).Queries.GetCredentialsByEmailAsync("jane@doe.com", default);
 
         // Assert
-        fromAdo.Should().Be(new UserCredentialsDto(user.Id, "stored-hash"));
+        fromAdo.Should().Be(new UserCredentialsDto(user.Id, "stored-hash", UserRole.Admin));
         fromEfCore.Should().Be(fromAdo);
         missing.Should().BeNull();
     }

@@ -48,6 +48,11 @@ namespace CqrsApiExample.Infrastructure.Persistence.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("nvarchar(256)");
 
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
                     b.Property<string>("Surname")
                         .IsRequired()
                         .HasMaxLength(100)

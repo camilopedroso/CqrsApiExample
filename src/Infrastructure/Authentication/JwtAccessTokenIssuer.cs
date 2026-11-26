@@ -11,8 +11,8 @@ namespace CqrsApiExample.Infrastructure.Authentication;
 ///     key and lifetime from <see cref="JwtOptions"/>.
 /// </summary>
 /// <remarks>
-///     The token carries as little as possible: who the user is (<c>sub</c>), a unique id
-///     (<c>jti</c>) and the standard times. A JWT is only signed, not encrypted, so anyone
+///     The token carries as little as possible: who the user is (<c>sub</c>), its role
+///     (<c>role</c>), a unique id (<c>jti</c>) and the standard times. A JWT is only signed, not encrypted, so anyone
 ///     holding it can read its claims; personal data stays out of it.
 ///     The times come from <see cref="TimeProvider"/>, so tests can issue tokens at any instant.
 /// </remarks>
@@ -33,8 +33,10 @@ internal sealed class JwtAccessTokenIssuer(IOptions<JwtOptions> options, TimePro
 
         Dictionary<string, object> claims = new()
         {
-            [JwtRegisteredClaimNames.Sub] = user.Id.ToString(),
-            [JwtRegisteredClaimNames.Jti] = Guid.NewGuid().ToString()
+            [AccessTokenClaims.Subject] = user.Id.ToString(),
+            [AccessTokenClaims.TokenId] = Guid.NewGuid().ToString(),
+            // The role as of this login: a change takes effect when the user logs in again.
+            [AccessTokenClaims.Role] = user.Role.ToString()
         };
 
         SecurityTokenDescriptor descriptor = new()

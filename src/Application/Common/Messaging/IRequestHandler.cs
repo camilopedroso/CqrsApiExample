@@ -3,7 +3,7 @@ namespace CqrsApiExample.Application.Common.Messaging;
 /// <summary>
 ///     Handles one request type. Callers depend on this interface directly; the
 ///     instance they get is wrapped in the decorators registered in
-///     <c>AddApplication</c> (logging, then validation).
+///     <c>AddApplication</c> (logging, authorization, then validation).
 /// </summary>
 /// <remarks>
 ///     <para>

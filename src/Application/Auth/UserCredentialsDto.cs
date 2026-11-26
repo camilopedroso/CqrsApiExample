@@ -1,3 +1,5 @@
+using CqrsApiExample.Domain.UserAggregate;
+
 namespace CqrsApiExample.Application.Auth;
 
 /// <summary>
@@ -10,4 +12,5 @@ namespace CqrsApiExample.Application.Auth;
 /// </remarks>
 /// <param name="Id">The user's id; it becomes the token's <c>sub</c> claim.</param>
 /// <param name="PasswordHash">The stored hash, checked with <c>IPasswordHasher.Verify</c>.</param>
-public sealed record UserCredentialsDto(Guid Id, string PasswordHash);
+/// <param name="Role">The user's role; it becomes the token's <c>role</c> claim.</param>
+public sealed record UserCredentialsDto(Guid Id, string PasswordHash, UserRole Role);

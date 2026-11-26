@@ -21,7 +21,7 @@ namespace CqrsApiExample.Api.Controllers;
 ///     response contract (via the <c>ToResponse</c> mappings), errors become a ProblemDetails
 ///     (<see cref="ApiControllerBase.Problem(IReadOnlyList{Error})"/>).
 ///     The controller never sees domain entities: handlers return read models (<see cref="UserDto"/>).
-///     The handler it receives is wrapped in LoggingDecorator → ValidationDecorator (see
+///     The handler it receives is wrapped in LoggingDecorator → AuthorizationDecorator → ValidationDecorator (see
 ///     <c>Application/DependencyInjection.cs</c>), so the input is already validated when the
 ///     handler runs. Unexpected exceptions are not caught here: GlobalExceptionHandler answers them.
 ///     <para>
@@ -56,10 +56,11 @@ namespace CqrsApiExample.Api.Controllers;
 [ProducesResponseType<ProblemDetails>(StatusCodes.Status500InternalServerError, "application/problem+json")]
 public class UsersController : ApiControllerBase
 {
-    /// <summary>GET /api/users: every user. 401 without a valid token.</summary>
+    /// <summary>GET /api/users: every user. Administrators only: 403 Auth.Forbidden for anyone else, 401 without a valid token.</summary>
     [HttpGet]
     [ProducesResponseType<IEnumerable<UserResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
     public async Task<IActionResult> GetUsers(
         // Resolved from DI for this request, not read from the HTTP request (see the class remarks).
         [FromServices] IRequestHandler<GetAllUsersQuery, Result<List<UserDto>>> handler,
@@ -79,7 +80,7 @@ public class UsersController : ApiControllerBase
         }
     }
 
-    /// <summary>GET /api/users/{id}: one user, or 404 User.NotFound.</summary>
+    /// <summary>GET /api/users/{id}: one user, or 404 User.NotFound. A user may read only itself (403 Auth.Forbidden otherwise); an administrator may read anyone.</summary>
     /// <remarks>
     ///     The <c>guid</c> route constraint answers a non-GUID id with 404 Request.NotFound
     ///     before this action runs; <see cref="Guid.Empty"/> gets 400 User.InvalidId from the validator.
@@ -88,6 +89,7 @@ public class UsersController : ApiControllerBase
     [ProducesResponseType<UserResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized, "application/problem+json")]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden, "application/problem+json")]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound, "application/problem+json")]
     public async Task<IActionResult> GetUser(
         Guid id,

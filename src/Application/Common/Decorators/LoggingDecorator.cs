@@ -14,9 +14,10 @@ namespace CqrsApiExample.Application.Common.Decorators;
 /// <remarks>
 ///     <para>
 ///         This is the outermost decorator: <c>AddRequestHandlers</c> builds the chain
-///         <c>LoggingDecorator → ValidationDecorator → handler</c>, so the elapsed time
-///         includes validation, and a request rejected by its validator is logged here
-///         as a failure with its validation codes.
+///         <c>LoggingDecorator → AuthorizationDecorator → ValidationDecorator → handler</c>,
+///         so the elapsed time includes authorization and validation, and a request refused by
+///         either is logged here as a failure with its codes (<c>Auth.Forbidden</c>,
+///         <c>User.InvalidName</c>...).
 ///     </para>
 ///     <para>
 ///         The constraint <c>TResult : IFailureResult&lt;TResult&gt;</c> is what lets this

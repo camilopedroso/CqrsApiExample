@@ -15,7 +15,7 @@ namespace CqrsApiExample.Application.Users.Commands.CreateUser;
 /// <remarks>
 ///     <para>
 ///         Callers never get this class directly: they receive it wrapped in
-///         <c>LoggingDecorator</c> → <c>ValidationDecorator</c>, so by the time
+///         <c>LoggingDecorator</c> → <c>AuthorizationDecorator</c> → <c>ValidationDecorator</c>, so by the time
 ///         <see cref="Handle"/> runs, <c>CreateUserCommandValidator</c> has already checked
 ///         the input format. Expected failures (invalid data, duplicate email) are returned
 ///         as errors; any other exception propagates to the API's global exception handler.

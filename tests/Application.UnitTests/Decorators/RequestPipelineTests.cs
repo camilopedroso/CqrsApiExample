@@ -21,7 +21,7 @@ public class RequestPipelineTests
 
     [Fact]
     [Trait("Category", "Decorator")]
-    public void Every_Handler_Is_Registered_Behind_Logging_Then_Validation()
+    public void Every_Handler_Is_Registered_Behind_Logging_Then_Authorization_Then_Validation()
     {
         // Arrange
         using var provider = BuildProvider();
@@ -40,9 +40,12 @@ public class RequestPipelineTests
             var outer = scope.ServiceProvider.GetRequiredService(handlerInterface);
             outer.GetType().GetGenericTypeDefinition().Should().Be(typeof(LoggingDecorator<,>));
 
-            var inner = InnerHandlerOf(outer);
-            inner.GetType().GetGenericTypeDefinition().Should().Be(typeof(ValidationDecorator<,>));
-            InnerHandlerOf(inner).GetType().Name.Should().EndWith("Handler");
+            var authorization = InnerHandlerOf(outer);
+            authorization.GetType().GetGenericTypeDefinition().Should().Be(typeof(AuthorizationDecorator<,>));
+
+            var validation = InnerHandlerOf(authorization);
+            validation.GetType().GetGenericTypeDefinition().Should().Be(typeof(ValidationDecorator<,>));
+            InnerHandlerOf(validation).GetType().Name.Should().EndWith("Handler");
         }
     }
 
@@ -91,6 +94,7 @@ public class RequestPipelineTests
         services.AddSingleton(Mock.Of<IEmailSender>());
         services.AddSingleton(Mock.Of<IPasswordHasher>(hasher => hasher.Hash(It.IsAny<string>()) == "hashed-password"));
         services.AddSingleton(Mock.Of<IAccessTokenIssuer>());
+        services.AddSingleton(Mock.Of<ICurrentUser>());
         return services.BuildServiceProvider(new ServiceProviderOptions { ValidateOnBuild = true, ValidateScopes = true });
     }
 

@@ -11,7 +11,7 @@ consistent error responses, and tests at every layer.
 ## What it shows
 
 - **CQRS without MediatR.** The project's own `ICommand`/`IQuery`/`IRequestHandler` contracts.
-  Every handler is wrapped in decorators (logging → validation) composed at startup, and each
+  Every handler is wrapped in decorators (logging → authorization → validation) composed at startup, and each
   controller action receives its handler as a parameter, so its dependency is explicit.
 - **A persistence-ignorant domain.** No EF Core, no attributes, no NuGet packages. Aggregates
   protect their invariants through factories that return the project's own `Result<T>`, and
@@ -27,6 +27,10 @@ consistent error responses, and tests at every layer.
 - **JWT authentication.** Registration stores a PBKDF2 password hash; `POST /api/auth/login`
   issues a short-lived HS256 access token. Every endpoint requires a token unless it says
   `[AllowAnonymous]` (a fallback policy), and an architecture test makes each action declare it.
+- **Authorization in the use cases.** A request declares who may send it (`IAdminOnlyRequest`,
+  `IOwnerOrAdminRequest`) and a decorator enforces it from the caller's token: members read only
+  themselves, administrators read anyone. A member gets `403` for someone else's id whether it
+  exists or not, so the answer never confirms an id.
 - **Consistent errors.** Every error, including the ones the framework raises (unknown route,
   malformed JSON, missing token, 405, 415), is an RFC 9457 ProblemDetails with `errorCodes` and a `traceId`.
 - **Tests per layer.** Unit tests, integration tests against a real SQL Server (Testcontainers),
@@ -57,8 +61,8 @@ dotnet run --project src/Api
 
 Then open <http://localhost:5235/swagger>. The OpenAPI document is at `/openapi/v1.json`.
 
-In the Development environment the API applies the EF Core migrations and seeds one user
-(`jane.doe@example.com`, password `JaneDoe.Dev.2026`, local only). SQL Server listens on `127.0.0.1:14330` (database `CqrsApi`) with a local-only SA
+In the Development environment the API applies the EF Core migrations and seeds one administrator
+(`jane.doe@example.com`, password `JaneDoe.Dev.2026`, local only). Everyone who registers is a member. SQL Server listens on `127.0.0.1:14330` (database `CqrsApi`) with a local-only SA
 password; set `MSSQL_SA_PASSWORD` to use another one. Outside Development nothing is applied
 automatically: run the migrations as a deployment step and provide `ConnectionStrings__Database`.
 
@@ -72,8 +76,8 @@ error cases included.
 |---|---|---|---|---|
 | `POST` | `/api/users` | no | `201` with `Location` | `400` validation, `409 User.DuplicateEmail` |
 | `POST` | `/api/auth/login` | no | `200` access token | `400` validation, `401 Auth.InvalidCredentials` |
-| `GET` | `/api/users` | yes | `200` list ordered by creation date | `401 Request.Unauthorized` |
-| `GET` | `/api/users/{id}` | yes | `200` the user | `400 User.InvalidId`, `401`, `404 User.NotFound` |
+| `GET` | `/api/users` | admin | `200` list ordered by creation date | `401 Request.Unauthorized`, `403 Auth.Forbidden` |
+| `GET` | `/api/users/{id}` | owner or admin | `200` the user | `400 User.InvalidId`, `401`, `403 Auth.Forbidden`, `404 User.NotFound` |
 
 ```http
 POST /api/users

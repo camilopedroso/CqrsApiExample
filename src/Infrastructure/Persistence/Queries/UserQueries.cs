@@ -29,13 +29,13 @@ internal sealed class UserQueries(ApplicationDbContext context) : IUserQueries
                       .SingleOrDefaultAsync(cancellationToken);
     }
 
-    // Uses the unique index on Email; selects only the two columns the login needs.
+    // Uses the unique index on Email; selects only the columns the login needs.
     public Task<UserCredentialsDto?> GetCredentialsByEmailAsync(string email, CancellationToken cancellationToken)
     {
         return context.Users
                       .AsNoTracking()
                       .Where(u => u.Email == email)
-                      .Select(u => new UserCredentialsDto(u.Id, u.PasswordHash))
+                      .Select(u => new UserCredentialsDto(u.Id, u.PasswordHash, u.Role))
                       .SingleOrDefaultAsync(cancellationToken);
     }
 }

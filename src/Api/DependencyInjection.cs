@@ -1,5 +1,7 @@
+using CqrsApiExample.Api.Common.Authentication;
 using CqrsApiExample.Api.Common.Errors;
 using CqrsApiExample.Api.Common.OpenApi;
+using CqrsApiExample.Application.Common.Interfaces.Authentication;
 using CqrsApiExample.Domain.Common.Results;
 using CqrsApiExample.Infrastructure.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -7,7 +9,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 
 namespace CqrsApiExample.Api;
@@ -53,6 +54,8 @@ public static class DependencyInjection
     ///     A request without a valid token never reaches a controller: the authorization middleware
     ///     answers 401 with an empty body and a <c>WWW-Authenticate</c> header, and
     ///     <c>UseStatusCodePages</c> turns it into a ProblemDetails with <c>Request.Unauthorized</c>.
+    ///     Which user may see which data is not decided here but in the Application
+    ///     (<c>AuthorizationDecorator</c>), from the <see cref="ICurrentUser"/> registered below.
     /// </remarks>
     private static void AddAuthentication(IServiceCollection services)
     {
@@ -70,6 +73,10 @@ public static class DependencyInjection
 
         services.AddAuthorizationBuilder()
                 .SetFallbackPolicy(requireAuthenticatedUser);
+
+        // The Application's view of the caller (AuthorizationDecorator reads it), built from the token.
+        services.AddHttpContextAccessor();
+        services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 
         static void ConfigureJwtBearer(JwtBearerOptions bearer, IOptions<JwtOptions> jwtOptions)
         {
@@ -90,7 +97,9 @@ public static class DependencyInjection
                 // Tolerance for clocks that disagree a little; the default (5 min) would stretch
                 // every token's lifetime by that much.
                 ClockSkew = TimeSpan.FromSeconds(30),
-                NameClaimType = JwtRegisteredClaimNames.Sub
+                NameClaimType = AccessTokenClaims.Subject,
+                // ClaimsPrincipal.IsInRole (and [Authorize(Roles = ...)]) read this claim.
+                RoleClaimType = AccessTokenClaims.Role
             };
         }
     }

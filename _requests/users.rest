@@ -35,6 +35,8 @@
 GET {{baseUrl}}/openapi/v1.json
 
 ### 1.2 Log in as the seed user (Development only; password in DbInitializer.SeedUserPassword)
+#   Jane is the administrator: she may list and read every user. Everyone who
+#   registers (3.1) is a member and may only read itself (see 4.5-4.7).
 #   200 { accessToken, tokenType: "Bearer", expiresIn: 1800 }, with Cache-Control: no-store.
 #   Every GET below sends this token (needs: login). Without it they answer
 #   401 Request.Unauthorized (see 7.4). Registering (3.1) and logging in are anonymous.
@@ -131,6 +133,7 @@ Content-Type: application/json
 
 ### 4.3 Log in as the new user (needs: createUser)
 #   The email is matched after normalization, like the duplicate check in 4.1.
+# @name memberLogin
 POST {{api}}/auth/login
 Content-Type: application/json
 
@@ -139,9 +142,22 @@ Content-Type: application/json
     "password": "correct horse battery staple"
 }
 
-### 4.4 User not found: 404 User.NotFound
+### 4.4 User not found: 404 User.NotFound (as the administrator; a member gets 403, see 4.7)
 GET {{api}}/users/bc0b9fa8-cfd3-430e-adf8-7afbed42a5a1
 Authorization: Bearer {{login.response.body.accessToken}}
+
+### 4.5 A member can't list users: 403 Auth.Forbidden (needs: memberLogin)
+GET {{api}}/users
+Authorization: Bearer {{memberLogin.response.body.accessToken}}
+
+### 4.6 A member can read itself: 200 (needs: createUser, memberLogin)
+GET {{createUser.response.headers.Location}}
+Authorization: Bearer {{memberLogin.response.body.accessToken}}
+
+### 4.7 ...but nobody else: 403 Auth.Forbidden (needs: listUsers, memberLogin)
+#   Also 403, not 404, for an id that doesn't exist: the answer never confirms an id.
+GET {{api}}/users/{{listUsers.response.body.$[0].id}}
+Authorization: Bearer {{memberLogin.response.body.accessToken}}
 
 
 ###

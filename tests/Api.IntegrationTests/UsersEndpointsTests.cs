@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using CqrsApiExample.Contracts.User;
+using CqrsApiExample.Domain.UserAggregate;
 using FluentAssertions;
 
 namespace CqrsApiExample.Api.IntegrationTests;
@@ -26,8 +27,8 @@ public sealed class AdoUsersEndpointsTests(ApiFixture api) : UsersEndpointsContr
 public abstract class UsersEndpointsContract(ApiFactory factory)
 {
     private readonly ApiFactory _factory = factory;
-    // Sends a valid token: reading users requires one. Registering (POST) doesn't, so it works either way.
-    private readonly HttpClient _client = factory.CreateAuthenticatedClient();
+    // An administrator: listing users requires one. The rules for members are in UserAuthorizationTests.
+    private readonly HttpClient _client = factory.CreateAuthenticatedClient(role: UserRole.Admin);
 
     [Fact]
     [Trait("Category", "Integration")]

@@ -81,7 +81,7 @@ C4Component
     }
 
     Container_Boundary(appLayer, "Application") {
-        Component(pipeline, "Request pipeline", "LoggingDecorator → ValidationDecorator", "Wraps every IRequestHandler: logs duration and error codes, runs the FluentValidation validator.")
+        Component(pipeline, "Request pipeline", "LoggingDecorator → AuthorizationDecorator → ValidationDecorator", "Wraps every IRequestHandler: logs duration and error codes, runs the FluentValidation validator.")
         Component(commands, "Command handlers", "CreateUserCommandHandler", "Builds the aggregate, checks the email, commits through IUnitOfWork.")
         Component(queries, "Query handlers", "GetAllUsers, GetUserById", "Read through IUserQueries only, return UserDto.")
         Component(dispatcher, "DomainEventDispatcher", "IDomainEventDispatcher", "Finds the IDomainEventHandler<T> of an event.")
@@ -150,7 +150,7 @@ C4Dynamic
 
     Container_Boundary(api, "Web API") {
         Component(controller, "UsersController")
-        Component(pipeline, "LoggingDecorator → ValidationDecorator")
+        Component(pipeline, "LoggingDecorator → AuthorizationDecorator → ValidationDecorator")
         Component(handler, "CreateUserCommandHandler")
         Component(user, "User aggregate")
         Component(uow, "IUserRepository + IUnitOfWork")

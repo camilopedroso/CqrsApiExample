@@ -12,6 +12,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="CqrsApiExample.Api.UnitTests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Application\CqrsApiExample.Application.csproj" />
     <ProjectReference Include="..\Contracts\CqrsApiExample.Contracts.csproj" />
     <ProjectReference Include="..\Infrastructure\CqrsApiExample.Infrastructure.csproj" />

@@ -45,7 +45,7 @@ public static class DependencyInjection
 
     /// <summary>
     ///     Registers every <see cref="IRequestHandler{TRequest,TResult}"/> wrapped in the decorators,
-    ///     outermost first: logging → validation → handler. The closed decorator types are built here,
+    ///     outermost first: logging → authorization → validation → handler. The closed decorator types are built here,
     ///     so a handler that breaks their constraints fails at startup, not on its first request.
     /// </summary>
     private static void AddRequestHandlers(IServiceCollection services, Assembly assembly)
@@ -56,6 +56,7 @@ public static class DependencyInjection
         Type[] decoratorsInnermostFirst =
         [
             typeof(ValidationDecorator<,>),
+            typeof(AuthorizationDecorator<,>),
             typeof(LoggingDecorator<,>)
         ];
 
@@ -83,7 +84,7 @@ public static class DependencyInjection
             // Whoever asks for IRequestHandler<TRequest, TResult> gets the outermost decorator.
             services.AddScoped(handlerInterface, BuildDecoratedHandler);
 
-            // Returns LoggingDecorator → ValidationDecorator → the handler.
+            // Returns LoggingDecorator → AuthorizationDecorator → ValidationDecorator → the handler.
             object BuildDecoratedHandler(IServiceProvider serviceProvider)
             {
                 object handler = serviceProvider.GetRequiredService(handlerType);
@@ -91,7 +92,7 @@ public static class DependencyInjection
                 foreach (Type decoratorType in decoratorTypes)
                 {
                     // Creates the decorator passing the current handler as its inner handler; the
-                    // other constructor parameters (ILogger, IValidator...) come from the container.
+                    // other constructor parameters (ILogger, ICurrentUser, IValidator...) come from the container.
                     object decorator = ActivatorUtilities.CreateInstance(serviceProvider, decoratorType, handler);
                     handler = decorator;
                 }

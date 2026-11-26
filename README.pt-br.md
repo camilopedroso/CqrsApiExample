@@ -11,7 +11,7 @@ domínio entregues por um outbox transacional, dois provedores de persistência 
 ## O que o projeto mostra
 
 - **CQRS sem MediatR.** Contratos próprios `ICommand`/`IQuery`/`IRequestHandler`. Cada handler é
-  envolvido por decorators (logging → validação) montados na inicialização, e cada action do
+  envolvido por decorators (logging → autorização → validação) montados na inicialização, e cada action do
   controller recebe o seu handler como parâmetro, então a dependência fica explícita.
 - **Um domínio que ignora a persistência.** Sem EF Core, sem atributos, sem pacotes NuGet. Os
   agregados protegem suas invariantes por meio de factories que retornam o `Result<T>` do próprio
@@ -29,6 +29,10 @@ domínio entregues por um outbox transacional, dois provedores de persistência 
 - **Autenticação com JWT.** O cadastro grava um hash PBKDF2 da senha; `POST /api/auth/login`
   emite um access token HS256 de vida curta. Todo endpoint exige token, a não ser que declare
   `[AllowAnonymous]` (uma fallback policy), e um teste de arquitetura obriga cada action a dizer qual.
+- **Autorização nos casos de uso.** Cada request declara quem pode enviá-la (`IAdminOnlyRequest`,
+  `IOwnerOrAdminRequest`) e um decorator aplica a regra a partir do token: membros leem só a si
+  mesmos, administradores leem qualquer um. Um membro recebe `403` para o id de outra pessoa, exista
+  ele ou não, então a resposta nunca confirma um id.
 - **Erros consistentes.** Todo erro, inclusive os que o framework gera (rota inexistente, JSON
   malformado, token ausente, 405, 415), é um ProblemDetails (RFC 9457) com `errorCodes` e um `traceId`.
 - **Testes por camada.** Testes unitários, testes de integração contra um SQL Server real
@@ -60,8 +64,8 @@ dotnet run --project src/Api
 
 Depois abra <http://localhost:5235/swagger>. O documento OpenAPI fica em `/openapi/v1.json`.
 
-No ambiente Development, a API aplica as migrations do EF Core e cria um usuário inicial
-(`jane.doe@example.com`, senha `JaneDoe.Dev.2026`, só para uso local). O SQL Server escuta em `127.0.0.1:14330` (banco `CqrsApi`) com uma senha de SA só para
+No ambiente Development, a API aplica as migrations do EF Core e cria um administrador inicial
+(`jane.doe@example.com`, senha `JaneDoe.Dev.2026`, só para uso local). Quem se cadastra é membro. O SQL Server escuta em `127.0.0.1:14330` (banco `CqrsApi`) com uma senha de SA só para
 uso local; defina `MSSQL_SA_PASSWORD` para usar outra. Fora de Development nada é aplicado
 automaticamente: rode as migrations como uma etapa do deploy e forneça `ConnectionStrings__Database`.
 
@@ -75,8 +79,8 @@ incluindo os casos de erro.
 |---|---|---|---|---|
 | `POST` | `/api/users` | não | `201` com `Location` | `400` validação, `409 User.DuplicateEmail` |
 | `POST` | `/api/auth/login` | não | `200` access token | `400` validação, `401 Auth.InvalidCredentials` |
-| `GET` | `/api/users` | sim | `200` lista ordenada pela data de criação | `401 Request.Unauthorized` |
-| `GET` | `/api/users/{id}` | sim | `200` o usuário | `400 User.InvalidId`, `401`, `404 User.NotFound` |
+| `GET` | `/api/users` | admin | `200` lista ordenada pela data de criação | `401 Request.Unauthorized`, `403 Auth.Forbidden` |
+| `GET` | `/api/users/{id}` | dono ou admin | `200` o usuário | `400 User.InvalidId`, `401`, `403 Auth.Forbidden`, `404 User.NotFound` |
 
 ```http
 POST /api/users

@@ -11,10 +11,11 @@ namespace CqrsApiExample.Application.Common.Decorators;
 /// </summary>
 /// <remarks>
 ///     <para>
-///         It sits between <see cref="LoggingDecorator{TRequest, TResult}" /> and the handler
-///         (<c>LoggingDecorator → ValidationDecorator → handler</c>, built by <c>AddRequestHandlers</c>),
-///         so an invalid request never reaches the handler, and the logging decorator still
-///         records it as a failure with its error codes.
+///         It is the innermost decorator
+///         (<c>LoggingDecorator → AuthorizationDecorator → ValidationDecorator → handler</c>,
+///         built by <c>AddRequestHandlers</c>), so an invalid request never reaches the handler,
+///         the logging decorator still records it as a failure with its error codes, and only a
+///         caller allowed to make the request gets to see its validation errors.
 ///     </para>
 ///     <para>
 ///         Invalid input is an expected failure, so it is returned as a result, not thrown.

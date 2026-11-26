@@ -54,7 +54,9 @@ public abstract class AuthEndpointsContract(ApiFactory factory)
         token.ExpiresIn.Should().Be(30 * 60);
 
         var created = await registration.Content.ReadFromJsonAsync<UserResponse>();
-        new JsonWebToken(token.AccessToken).Subject.Should().Be(created!.Id.ToString());
+        var claims = new JsonWebToken(token.AccessToken);
+        claims.Subject.Should().Be(created!.Id.ToString());
+        claims.GetClaim("role").Value.Should().Be("Member", "registration never grants more than Member");
 
         using var request = new HttpRequestMessage(HttpMethod.Get, $"/api/users/{created.Id}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
@@ -70,8 +72,10 @@ public abstract class AuthEndpointsContract(ApiFactory factory)
         var login = await _anonymous.PostAsJsonAsync("/api/auth/login",
                                                      new LoginRequest("jane.doe@example.com", DbInitializer.SeedUserPassword));
 
-        // Assert
+        // Assert: the seed user is the administrator
         login.StatusCode.Should().Be(HttpStatusCode.OK);
+        var token = await login.Content.ReadFromJsonAsync<AccessTokenResponse>();
+        new JsonWebToken(token!.AccessToken).GetClaim("role").Value.Should().Be("Admin");
     }
 
     [Fact]

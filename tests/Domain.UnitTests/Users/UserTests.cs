@@ -117,6 +117,23 @@ public class UserTests
 
     [Fact]
     [Trait("Category", "Domain")]
+    public void Create_Should_Make_A_Member_And_GrantAdmin_Should_Promote_It()
+    {
+        // Arrange
+        var user = User.Create("John", "Doe", "john@doe.com", "hashed-password").Value;
+
+        // Assert: nobody registers as an administrator
+        user.Role.Should().Be(UserRole.Member);
+
+        // Act
+        user.GrantAdmin();
+
+        // Assert
+        user.Role.Should().Be(UserRole.Admin);
+    }
+
+    [Fact]
+    [Trait("Category", "Domain")]
     public void NormalizeEmail_Should_Match_What_Create_Stores()
     {
         // Act

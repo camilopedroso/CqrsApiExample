@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using CqrsApiExample.Application.Auth;
 using CqrsApiExample.Application.Common.Interfaces.Authentication;
 using CqrsApiExample.Application.Common.Interfaces.Notifications;
+using CqrsApiExample.Domain.UserAggregate;
 using CqrsApiExample.Infrastructure.Outbox;
 using CqrsApiExample.Tests.Shared;
 using Microsoft.AspNetCore.Hosting;
@@ -72,12 +73,12 @@ public sealed class ApiFactory(string connectionString,
     ///     A client that sends a valid access token, issued directly by the API's own issuer, so a
     ///     test that is not about authentication doesn't pay for a registration and a login.
     ///     The token is for <paramref name="userId"/> (a random id by default: nothing checks that
-    ///     the user exists).
+    ///     the user exists) with <paramref name="role"/>.
     /// </summary>
-    public HttpClient CreateAuthenticatedClient(Guid? userId = null)
+    public HttpClient CreateAuthenticatedClient(Guid? userId = null, UserRole role = UserRole.Member)
     {
         var issuer = Services.GetRequiredService<IAccessTokenIssuer>();
-        var accessToken = issuer.Issue(new UserCredentialsDto(userId ?? Guid.NewGuid(), "unused-hash"));
+        var accessToken = issuer.Issue(new UserCredentialsDto(userId ?? Guid.NewGuid(), "unused-hash", role));
 
         var client = CreateClient();
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken.AccessToken);

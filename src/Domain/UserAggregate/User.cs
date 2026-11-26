@@ -56,6 +56,12 @@ public sealed class User : AggregateRoot
     public string PasswordHash { get; private set; }
 
     /// <summary>
+    ///     <see cref="UserRole.Member"/> for everyone who registers: a client can never choose
+    ///     its own role. Only <see cref="GrantAdmin"/> changes it.
+    /// </summary>
+    public UserRole Role { get; private set; } = UserRole.Member;
+
+    /// <summary>
     ///     Creates a user, enforcing the domain invariants, and raises
     ///     <see cref="UserCreatedDomainEvent"/>.
     /// </summary>
@@ -124,6 +130,12 @@ public sealed class User : AggregateRoot
 
         return user;
     }
+
+    /// <summary>
+    ///     Makes the user an administrator. No endpoint calls it: today only the development
+    ///     seed does (an admin is created by whoever runs the system, never by a client).
+    /// </summary>
+    public void GrantAdmin() => Role = UserRole.Admin;
 
     /// <summary>
     ///     The form an email is stored in: trimmed and lowercase. Whoever looks a user up by

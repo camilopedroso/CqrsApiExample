@@ -1,3 +1,4 @@
+using CqrsApiExample.Application.Common.Authorization;
 using CqrsApiExample.Application.Common.Messaging;
 using CqrsApiExample.Domain.Common.Results;
 
@@ -21,5 +22,9 @@ namespace CqrsApiExample.Application.Users.Queries.GetAllUsers;
 ///         (no users is an empty list, not an error): the decorators require every request to
 ///         answer with a <c>Result&lt;T&gt;</c>. There is no paging yet, so it returns the whole table.
 ///     </para>
+///     <para>
+///         Administrators only (<see cref="IAdminOnlyRequest" />): the list holds every user's email.
+///         Anyone else gets <c>Auth.Forbidden</c> (403) from <c>AuthorizationDecorator</c>.
+///     </para>
 /// </remarks>
-public sealed record GetAllUsersQuery : IQuery<Result<List<UserDto>>>;
+public sealed record GetAllUsersQuery : IQuery<Result<List<UserDto>>>, IAdminOnlyRequest;

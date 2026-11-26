@@ -1,4 +1,5 @@
 using CqrsApiExample.Application.Auth;
+using CqrsApiExample.Domain.UserAggregate;
 using CqrsApiExample.Infrastructure.Authentication;
 using FluentAssertions;
 using Microsoft.Extensions.Configuration;
@@ -30,7 +31,7 @@ public class JwtAccessTokenIssuerTests
         var userId = Guid.NewGuid();
 
         // Act
-        var accessToken = issuer.Issue(new UserCredentialsDto(userId, "unused-hash"));
+        var accessToken = issuer.Issue(new UserCredentialsDto(userId, "unused-hash", UserRole.Admin));
 
         // Assert: valid for the configured issuer, audience and key, at the issuing instant
         accessToken.ExpiresIn.Should().Be(TimeSpan.FromMinutes(15));
@@ -40,6 +41,7 @@ public class JwtAccessTokenIssuerTests
 
         var token = new JsonWebToken(accessToken.AccessToken);
         token.Subject.Should().Be(userId.ToString());
+        token.GetClaim("role").Value.Should().Be("Admin");
         token.Id.Should().NotBeNullOrEmpty();
         token.Alg.Should().Be(SecurityAlgorithms.HmacSha256);
         token.ValidTo.Should().Be(TestDatabase.Start.UtcDateTime.AddMinutes(15));

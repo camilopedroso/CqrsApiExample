@@ -38,9 +38,10 @@ internal sealed class AdoUserQueries(SqlConnectionFactory connections) : IUserQu
 
     // Only what the login needs, never the rest of the user. Id is ordinal 0 here too.
     private const string GetCredentialsByEmailSql =
-        $"SELECT [Id], [PasswordHash] FROM [{Schemas.Accounts}].[Users] WHERE [Email] = @Email";
+        $"SELECT [Id], [PasswordHash], [Role] FROM [{Schemas.Accounts}].[Users] WHERE [Email] = @Email";
 
     private const int PasswordHashOrdinal = 1;
+    private const int RoleOrdinal = 2;
 
     public Task<List<UserDto>> GetAllAsync(CancellationToken cancellationToken)
     {
@@ -100,7 +101,7 @@ internal sealed class AdoUserQueries(SqlConnectionFactory connections) : IUserQu
     }
 
     /// <summary>
-    ///     The login's lookup: id and password hash of the user with this (normalized) email,
+    ///     The login's lookup: id, password hash and role of the user with this (normalized) email,
     ///     or <c>null</c>. Uses the unique index on Email.
     /// </summary>
     public Task<UserCredentialsDto?> GetCredentialsByEmailAsync(string email, CancellationToken cancellationToken)
@@ -131,7 +132,11 @@ internal sealed class AdoUserQueries(SqlConnectionFactory connections) : IUserQu
             Guid id = reader.GetGuid(IdOrdinal);
             string passwordHash = reader.GetString(PasswordHashOrdinal);
 
-            UserCredentialsDto credentials = new(id, passwordHash);
+            // Stored by name (see UserConfiguration); a name this code doesn't know fails loudly here.
+            string roleName = reader.GetString(RoleOrdinal);
+            UserRole role = Enum.Parse<UserRole>(roleName);
+
+            UserCredentialsDto credentials = new(id, passwordHash, role);
 
             return credentials;
         }

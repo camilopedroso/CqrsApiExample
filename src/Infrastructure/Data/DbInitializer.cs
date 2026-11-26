@@ -10,7 +10,7 @@ public static class DbInitializer
 {
     /// <summary>
     ///     The seed user's password, so a fresh development database has someone to log in as
-    ///     (<c>jane.doe@example.com</c>). Development only: nothing is seeded anywhere else.
+    ///     (<c>jane.doe@example.com</c>, an administrator). Development only: nothing is seeded anywhere else.
     /// </summary>
     public const string SeedUserPassword = "JaneDoe.Dev.2026";
 
@@ -41,7 +41,12 @@ public static class DbInitializer
 
         string passwordHash = passwordHasher.Hash(SeedUserPassword);
 
-        context.Users.Add(User.Create("Jane", "Doe", "jane.doe@example.com", passwordHash).Value);
+        User jane = User.Create("Jane", "Doe", "jane.doe@example.com", passwordHash).Value;
+
+        // The seed user is the administrator, so a fresh database has someone who can list users.
+        jane.GrantAdmin();
+
+        context.Users.Add(jane);
         await context.SaveChangesAsync(cancellationToken);
     }
 }

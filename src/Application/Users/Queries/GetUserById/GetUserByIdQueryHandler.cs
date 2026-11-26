@@ -13,7 +13,7 @@ namespace CqrsApiExample.Application.Users.Queries.GetUserById;
 ///         to <see cref="UserDto" />, so no <c>User</c> aggregate is built and nothing is tracked.
 ///     </para>
 ///     <para>
-///         Callers get it wrapped in <c>LoggingDecorator</c> → <c>ValidationDecorator</c>, so
+///         Callers get it wrapped in <c>LoggingDecorator</c> → <c>AuthorizationDecorator</c> → <c>ValidationDecorator</c>, so
 ///         <see cref="GetUserByIdQueryValidator" /> has already rejected <see cref="Guid.Empty" />
 ///         when <see cref="Handle" /> runs. The controller answers 200 with the user, or 404 with
 ///         <c>User.NotFound</c>.

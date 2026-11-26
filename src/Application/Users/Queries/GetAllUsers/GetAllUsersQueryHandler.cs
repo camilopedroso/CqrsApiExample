@@ -12,7 +12,7 @@ namespace CqrsApiExample.Application.Users.Queries.GetAllUsers;
 ///         to <see cref="UserDto" />, so no <c>User</c> aggregate is built and nothing is tracked.
 ///     </para>
 ///     <para>
-///         Callers get it wrapped in <c>LoggingDecorator</c> → <c>ValidationDecorator</c>, like every
+///         Callers get it wrapped in <c>LoggingDecorator</c> → <c>AuthorizationDecorator</c> → <c>ValidationDecorator</c>, like every
 ///         handler. The query has no validator, so validation is skipped. The controller maps the list
 ///         to <c>UserResponse</c> contracts and answers 200.
 ///     </para>
